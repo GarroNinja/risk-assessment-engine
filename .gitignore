@@ -1,0 +1,19 @@
+# local commit replayer (do not ship)
+commit.sh
+.commits/
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+
+# pytest
+.pytest_cache/
+
+# editor
+.idea/
+.vscode/
+.DS_Store
