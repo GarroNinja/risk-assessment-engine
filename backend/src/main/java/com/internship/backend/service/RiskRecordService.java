@@ -3,6 +3,7 @@ package com.internship.backend.service;
 import com.internship.backend.entity.RiskRecord;
 import com.internship.backend.exception.ResourceNotFoundException;
 import com.internship.backend.repository.RiskRecordRepository;
+import jakarta.mail.MessagingException;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -13,9 +14,12 @@ import java.util.List;
 public class RiskRecordService {
 
     private final RiskRecordRepository repository;
+    private final EmailService emailService;
 
-    public RiskRecordService(RiskRecordRepository repository) {
+    public RiskRecordService(RiskRecordRepository repository,
+                             EmailService emailService) {
         this.repository = repository;
+        this.emailService = emailService;
     }
 
     @CacheEvict(value = {"riskRecords", "riskRecord"}, allEntries = true)
@@ -33,7 +37,15 @@ public class RiskRecordService {
             throw new IllegalArgumentException("Status is required");
         }
 
-        return repository.save(riskRecord);
+        RiskRecord saved = repository.save(riskRecord);
+
+        try {
+            emailService.sendCreateNotification(saved);
+        } catch (MessagingException e) {
+            e.printStackTrace();
+        }
+
+        return saved;
     }
 
     @Cacheable("riskRecords")
