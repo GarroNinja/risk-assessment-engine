@@ -22,7 +22,7 @@ spring:
     show-sql: true
 
   cache:
-    type: redis
+    type: simple
 
   data:
     redis:

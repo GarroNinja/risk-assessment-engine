@@ -3,7 +3,6 @@ package com.internship.backend.service;
 import com.internship.backend.entity.RiskRecord;
 import com.internship.backend.exception.ResourceNotFoundException;
 import com.internship.backend.repository.RiskRecordRepository;
-import jakarta.mail.MessagingException;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -39,11 +38,13 @@ public class RiskRecordService {
 
         RiskRecord saved = repository.save(riskRecord);
 
-        try {
-            emailService.sendCreateNotification(saved);
-        } catch (MessagingException e) {
-            e.printStackTrace();
-        }
+        new Thread(() -> {
+            try {
+                emailService.sendCreateNotification(saved);
+            } catch (Exception e) {
+                System.out.println("Email failed but record saved successfully.");
+            }
+        }).start();
 
         return saved;
     }
