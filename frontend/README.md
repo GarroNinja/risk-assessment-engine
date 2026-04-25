@@ -171,6 +171,73 @@ client-side validation with inline error messages, submit handler
 
 ---
 
+### Day 4 — Connect List Page to Backend API
+**Date:** Thursday 17 April 2026
+**Task:** Connect list page to GET /all API — handle Spring Page
+response, implement pagination controls, sort by column headers
+
+**Work completed:**
+- Connected list page to real backend `GET /risks/all` endpoint
+- Correctly handles Spring Boot Page response object:
+  - Reads `content` array — the actual records
+  - Reads `totalPages` — for pagination controls
+  - Reads `totalElements` — for record count display
+  - Reads `number` — current page index
+- Safe array extractor handles all API response shapes — plain array,
+  Spring Page object, or any nested structure
+- Full pagination footer implemented:
+  - First, Previous, page number pills, Next, Last buttons
+  - Smart ellipsis for large page counts
+  - Shows record range — e.g. "Showing 1–10 of 48 risks"
+  - Scrolls to top of page on page change
+- Sort by column — sends `sortBy` and `sortDir` params to API
+- Active sorted column highlighted in blue in the table header
+- Sort direction arrow indicator on active column
+- Mini inline score bar added to each row for quick visual scanning
+- Specific error messages for Network Error, 401 and 403 responses
+- Page resets to 0 automatically when search or filters change
+
+---
+
+### Day 5 — Login Page, JWT and Authentication
+**Date:** Friday 18 April 2026
+**Task:** Build login page — form, store JWT, AuthContext with
+isAuthenticated, ProtectedRoute redirects if not logged in
+
+**Work completed:**
+- Built complete `LoginPage.jsx` with professional UI
+  - Brand logo icon and application name header
+  - Email and password controlled input fields
+  - Show/hide password toggle button
+  - Client-side validation — email format check, password min length
+  - Errors shown inline after field is touched
+  - Submit spinner animation during API call
+  - Specific error messages for 401, 403, 404 and Network Error
+  - Demo credentials panel for testing all three roles
+  - Auto-redirects to dashboard on successful login
+  - Redirects to dashboard if user is already logged in
+- Updated `AuthContext.jsx`:
+  - Initialises token from localStorage on page load using lazy
+    useState initialiser — persists login across browser refresh
+  - `login(jwt)` — stores token in both state and localStorage
+  - `logout()` — clears token from both state and localStorage
+  - `getRole()` — decodes JWT payload to extract user role
+  - Exposes `isAuthenticated`, `token`, `role`, `login`, `logout`
+  - Throws clear error if `useAuth` is used outside `AuthProvider`
+  - Wrapped `login`, `logout`, `getRole` in `useCallback` for
+    performance
+- Updated `ProtectedRoute.jsx`:
+  - Uses React Router `Navigate` instead of `window.location.href`
+  - Saves the attempted URL in router state so user is redirected
+    back after login
+  - Supports optional `requiredRole` prop for role-based access
+  - Shows Access Denied page for authenticated but unauthorised users
+- Updated `App.jsx`:
+  - Login route redirects to dashboard if already authenticated
+  - All protected routes wrapped with `ProtectedRoute`
+  - Fallback `*` route redirects to dashboard
+
+---
 ## Tech Stack
 
 | Technology | Version | Purpose |
@@ -210,7 +277,7 @@ frontend/
 │   ├── ErrorBoundary.jsx     ← React error boundary wrapper
 │   └── AiPanel.jsx           ← AI analysis panel (Day 8)
 ├── pages/
-│   ├── LoginPage.jsx         ← Planned: Day 5
+│   ├── LoginPage.jsx         ← complete: Day 5
 │   ├── ListPage.jsx          ← Complete: Day 2
 │   ├── DetailPage.jsx        ← Planned: Day 7
 │   ├── FormPage.jsx          ← Complete: Day 3
@@ -309,5 +376,4 @@ http://localhost:5173
 
 ---
 
-*Tool-02 — Risk Assessment Engine | Capstone Project | Java Developer 3 | Frontend*
-*Sprint: 14 April – 9 May 2026 | Demo Day: 9 May 2026*
+*Tool-02 — Risk Assessment Engine | Capstone *
