@@ -1,9 +1,6 @@
-import api from './api'
+import axios from 'axios'
 
 const AI_BASE = import.meta.env.VITE_AI_URL ?? 'http://localhost:5000'
-
-// use axios but point directly to Flask AI service on port 5000
-import axios from 'axios'
 
 const aiApi = axios.create({
   baseURL: AI_BASE,
@@ -11,23 +8,41 @@ const aiApi = axios.create({
   timeout: 30000,
 })
 
-export const describeRisk = (data) =>
-  aiApi.post('/describe', data)
+export const describeRisk    = (data)     => aiApi.post('/describe', data)
+export const recommendActions = (data)    => aiApi.post('/recommend', data)
+export const categoriseRisk  = (data)     => aiApi.post('/categorise', data)
+export const queryRag        = (question) => aiApi.post('/query', { question })
+export const generateReport  = (data)     => aiApi.post('/generate-report', data)
+export const analyseDocument = (text)     => aiApi.post('/analyse-document', { text })
+export const getAiHealth     = ()         => aiApi.get('/health')
 
-export const recommendActions = (data) =>
-  aiApi.post('/recommend', data)
+//  SSE streaming — returns cleanup function 
+export function streamReport(payload, onChunk, onDone, onError) {
+  const AI_URL = import.meta.env.VITE_AI_URL ?? 'http://localhost:5000'
 
-export const categoriseRisk = (data) =>
-  aiApi.post('/categorise', data)
+  // build query string from payload
+  const params = new URLSearchParams(
+    Object.entries(payload).map(([k, v]) => [k, String(v)])
+  ).toString()
 
-export const queryRag = (question) =>
-  aiApi.post('/query', { question })
+  const url = `${AI_URL}/generate-report/stream?${params}`
+  const es  = new EventSource(url)
 
-export const generateReport = (data) =>
-  aiApi.post('/generate-report', data)
+  es.onmessage = (e) => {
+    if (e.data === '[DONE]') {
+      es.close()
+      onDone()
+    } else {
+      onChunk(e.data)
+    }
+  }
 
-export const analyseDocument = (text) =>
-  aiApi.post('/analyse-document', { text })
+  es.onerror = (err) => {
+    console.error('SSE error:', err)
+    es.close()
+    onError('Streaming connection failed. Please try again.')
+  }
 
-export const getAiHealth = () =>
-  aiApi.get('/health')
+  // return cleanup so React can close on unmount
+  return () => es.close()
+}
