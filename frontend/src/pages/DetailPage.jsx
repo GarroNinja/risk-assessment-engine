@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { getRiskById, deleteRisk } from '../services/riskService'
-import { describeRisk, recommendActions } from '../services/aiService'
+import AiPanel from '../components/AiPanel'
 
-// ── helpers — defined OUTSIDE to prevent remount ─────────────────────────────
+//  helpers 
 function formatDate(dateStr) {
   if (!dateStr) return '—'
   return new Date(dateStr).toLocaleDateString('en-GB', {
@@ -19,7 +19,7 @@ function formatDateTime(dateStr) {
   })
 }
 
-// ── badge configs ─────────────────────────────────────────────────────────────
+//  badge styles  
 const SEVERITY_STYLES = {
   HIGH:   'bg-red-100 text-red-700 border border-red-200',
   MEDIUM: 'bg-yellow-100 text-yellow-700 border border-yellow-200',
@@ -32,83 +32,157 @@ const STATUS_STYLES = {
   CLOSED:    'bg-gray-100 text-gray-600 border border-gray-200',
 }
 
-const PRIORITY_STYLES = {
-  HIGH:   'bg-red-50 text-red-700 border-l-4 border-red-400',
-  MEDIUM: 'bg-yellow-50 text-yellow-700 border-l-4 border-yellow-400',
-  LOW:    'bg-green-50 text-green-700 border-l-4 border-green-400',
+//score helpers 
+function scoreColour(score) {
+  if (score >= 75) return { ring: '#EF4444', text: 'text-red-600', label: 'Critical Risk', bg: 'bg-red-50' }
+  if (score >= 40) return { ring: '#F59E0B', text: 'text-yellow-600', label: 'Moderate Risk', bg: 'bg-yellow-50' }
+  return { ring: '#10B981', text: 'text-green-600', label: 'Low Risk', bg: 'bg-green-50' }
 }
 
-// ── score ring colour ─────────────────────────────────────────────────────────
-function scoreRingColour(score) {
-  if (score >= 75) return '#EF4444'
-  if (score >= 40) return '#F59E0B'
-  return '#10B981'
+// components defined OUTSIDE to prevent remount
+function Navbar({ navigate }) {
+  return (
+    <nav className="bg-primary text-white px-6 py-4 flex items-center
+                    justify-between shadow sticky top-0 z-20">
+      <div className="flex items-center gap-3">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          className="w-6 h-6">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+        </svg>
+        <span className="text-lg font-semibold tracking-wide">
+          Risk Assessment Engine
+        </span>
+      </div>
+      <div className="flex gap-4 text-sm">
+        <button onClick={() => navigate('/')}
+          className="hover:underline opacity-80 hover:opacity-100 transition">
+          Dashboard
+        </button>
+        <button onClick={() => navigate('/risks')}
+          className="hover:underline opacity-80 hover:opacity-100 transition">
+          Risks
+        </button>
+        <button onClick={() => navigate('/analytics')}
+          className="hover:underline opacity-80 hover:opacity-100 transition">
+          Analytics
+        </button>
+      </div>
+    </nav>
+  )
 }
 
-function scoreTextColour(score) {
-  if (score >= 75) return 'text-red-600'
-  if (score >= 40) return 'text-yellow-600'
-  return 'text-green-600'
-}
-
-// ── reusable field row ────────────────────────────────────────────────────────
 function FieldRow({ label, children }) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4
-                    py-3 border-b border-gray-100 last:border-0">
+    <div className="grid grid-cols-3 gap-4 py-3
+                    border-b border-gray-50 last:border-0">
       <span className="text-xs font-semibold text-gray-400 uppercase
-                       tracking-wider sm:w-36 shrink-0 pt-0.5">
+                       tracking-wider pt-0.5 col-span-1">
         {label}
       </span>
-      <span className="text-sm text-gray-800 flex-1">{children}</span>
+      <div className="text-sm text-gray-800 col-span-2 leading-relaxed">
+        {children}
+      </div>
     </div>
   )
 }
 
-// ── delete confirm modal ──────────────────────────────────────────────────────
+function ScoreRing({ score }) {
+  const radius       = 40
+  const stroke       = 7
+  const norm         = radius - stroke / 2
+  const circumference = 2 * Math.PI * norm
+  const offset       = circumference - (Math.min(score, 100) / 100) * circumference
+  const c            = scoreColour(score)
+
+  return (
+    <div className="relative flex items-center justify-center w-24 h-24">
+      <svg width="96" height="96" className="-rotate-90">
+        <circle cx="48" cy="48" r={norm}
+          fill="none" stroke="#f3f4f6" strokeWidth={stroke} />
+        <circle cx="48" cy="48" r={norm}
+          fill="none" stroke={c.ring} strokeWidth={stroke}
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          style={{ transition: 'stroke-dashoffset 0.8s ease' }}
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center
+                      justify-center">
+        <span className={`text-xl font-bold leading-none ${c.text}`}>
+          {score}
+        </span>
+        <span className="text-xs text-gray-400 leading-none mt-0.5">
+          /100
+        </span>
+      </div>
+    </div>
+  )
+}
+
 function DeleteModal({ title, onConfirm, onCancel, loading }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center
-                    bg-black bg-opacity-40 px-4">
-      <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm">
+                    bg-black bg-opacity-50 px-4 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm
+                      animate-in">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 bg-red-100 rounded-full flex items-center
-                          justify-center text-red-600 text-lg shrink-0">
-            ⚠
+          <div className="w-12 h-12 bg-red-100 rounded-full flex items-center
+                          justify-center shrink-0">
+            <svg className="w-6 h-6 text-red-600" fill="none"
+              stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round"
+                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0
+                   01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0
+                   00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
           </div>
           <div>
-            <h3 className="font-semibold text-gray-800">Delete Risk</h3>
-            <p className="text-xs text-gray-500">This action cannot be undone</p>
+            <h3 className="font-bold text-gray-900 text-base">
+              Delete Risk
+            </h3>
+            <p className="text-xs text-gray-500 mt-0.5">
+              This action cannot be undone
+            </p>
           </div>
         </div>
-        <p className="text-sm text-gray-600 mb-6">
-          Are you sure you want to delete{' '}
-          <span className="font-semibold">"{title}"</span>?
+
+        <p className="text-sm text-gray-600 mb-6 leading-relaxed
+                      bg-gray-50 rounded-lg px-4 py-3">
+          You are about to permanently delete{' '}
+          <span className="font-semibold text-gray-800">"{title}"</span>.
+          All associated data will be lost.
         </p>
+
         <div className="flex gap-3">
           <button
             onClick={onConfirm}
             disabled={loading}
-            className="flex-1 py-2 bg-red-600 text-white text-sm font-medium
-                       rounded-lg hover:bg-red-700 disabled:opacity-50
-                       transition flex items-center justify-center gap-2"
+            className="flex-1 py-2.5 bg-red-600 text-white text-sm
+                       font-semibold rounded-xl hover:bg-red-700
+                       disabled:opacity-50 transition flex items-center
+                       justify-center gap-2"
           >
-            {loading && (
-              <svg className="animate-spin h-4 w-4" fill="none"
-                viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10"
-                  stroke="currentColor" strokeWidth="4"/>
-                <path className="opacity-75" fill="currentColor"
-                  d="M4 12a8 8 0 018-8v8z"/>
-              </svg>
-            )}
-            {loading ? 'Deleting...' : 'Yes, Delete'}
+            {loading ? (
+              <>
+                <svg className="animate-spin h-4 w-4" fill="none"
+                  viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10"
+                    stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor"
+                    d="M4 12a8 8 0 018-8v8z"/>
+                </svg>
+                Deleting...
+              </>
+            ) : 'Yes, Delete'}
           </button>
           <button
             onClick={onCancel}
             disabled={loading}
-            className="flex-1 py-2 border border-gray-300 text-gray-700
-                       text-sm rounded-lg hover:bg-gray-50 transition"
+            className="flex-1 py-2.5 border border-gray-200 text-gray-700
+                       text-sm font-medium rounded-xl hover:bg-gray-50
+                       transition"
           >
             Cancel
           </button>
@@ -118,72 +192,93 @@ function DeleteModal({ title, onConfirm, onCancel, loading }) {
   )
 }
 
-// ── score ring SVG ────────────────────────────────────────────────────────────
-function ScoreRing({ score }) {
-  const radius      = 36
-  const stroke      = 6
-  const normalised  = radius - stroke / 2
-  const circumference = 2 * Math.PI * normalised
-  const offset      = circumference - (score / 100) * circumference
-  const colour      = scoreRingColour(score)
-
+function LoadingSkeleton() {
   return (
-    <div className="flex flex-col items-center">
-      <svg width="88" height="88" className="-rotate-90">
-        <circle cx="44" cy="44" r={normalised}
-          fill="none" stroke="#e5e7eb" strokeWidth={stroke} />
-        <circle cx="44" cy="44" r={normalised}
-          fill="none" stroke={colour} strokeWidth={stroke}
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          strokeLinecap="round"
-          style={{ transition: 'stroke-dashoffset 0.6s ease' }}
-        />
-      </svg>
-      <div className="absolute flex flex-col items-center">
-        <span className={`text-2xl font-bold ${scoreTextColour(score)}`}>
-          {score}
-        </span>
-        <span className="text-xs text-gray-400">/100</span>
+    <div className="min-h-screen bg-gray-50 font-sans">
+      <div className="bg-primary h-16 shadow" />
+      <div className="max-w-5xl mx-auto px-6 py-8">
+        <div className="animate-pulse space-y-6">
+          <div className="h-4 bg-gray-200 rounded w-48" />
+          <div className="h-8 bg-gray-200 rounded w-2/3" />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 space-y-4">
+              <div className="bg-white rounded-2xl border border-gray-200 p-6
+                              space-y-4">
+                {Array.from({ length: 7 }).map((_, i) => (
+                  <div key={i} className="h-8 bg-gray-100 rounded" />
+                ))}
+              </div>
+            </div>
+            <div className="space-y-4">
+              <div className="bg-white rounded-2xl border border-gray-200
+                              p-6 h-48" />
+              <div className="bg-white rounded-2xl border border-gray-200
+                              p-6 h-48" />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-export default function DetailPage() {
-  const navigate      = useNavigate()
-  const { id }        = useParams()
+function ErrorState({ message, navigate }) {
+  return (
+    <div className="min-h-screen bg-gray-50 font-sans">
+      <div className="bg-primary h-16 shadow" />
+      <div className="flex items-center justify-center min-h-[80vh]">
+        <div className="text-center p-8 max-w-sm">
+          <div className="w-20 h-20 bg-red-100 rounded-full flex items-center
+                          justify-center mx-auto mb-4">
+            <svg className="w-10 h-10 text-red-500" fill="none"
+              stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round"
+                d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948
+                   3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949
+                   3.378c-.866-1.5-3.032-1.5-3.898 0L2.697
+                   16.126zM12 15.75h.007v.008H12v-.008z" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-bold text-gray-800 mb-2">{message}</h2>
+          <p className="text-sm text-gray-500 mb-6">
+            The risk you are looking for could not be loaded.
+          </p>
+          <button
+            onClick={() => navigate('/risks')}
+            className="px-6 py-2.5 bg-primary text-white text-sm font-medium
+                       rounded-xl hover:opacity-90 transition"
+          >
+            ← Back to Risk Register
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
-  const [risk, setRisk]               = useState(null)
-  const [loading, setLoading]         = useState(true)
-  const [error, setError]             = useState(null)
+//  main component 
+export default function DetailPage() {
+  const navigate = useNavigate()
+  const { id }   = useParams()
+
+  const [risk, setRisk]                       = useState(null)
+  const [loading, setLoading]                 = useState(true)
+  const [error, setError]                     = useState(null)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleteLoading, setDeleteLoading]     = useState(false)
 
-  // ── AI state ──────────────────────────────────────────────────────────────
-  const [aiDescription, setAiDescription]     = useState(null)
-  const [aiRecommendations, setAiRecommendations] = useState(null)
-  const [aiLoading, setAiLoading]             = useState(false)
-  const [aiError, setAiError]                 = useState(null)
-  const [aiTab, setAiTab]                     = useState('describe')
-
-  // ── fetch risk ────────────────────────────────────────────────────────────
   useEffect(() => {
     setLoading(true)
     getRiskById(id)
       .then(res => setRisk(res.data))
-      .catch(err => {
-        if (err.response?.status === 404) {
-          setError('Risk not found. It may have been deleted.')
-        } else {
-          setError('Failed to load risk details. Please try again.')
-        }
-      })
+      .catch(err => setError(
+        err.response?.status === 404
+          ? 'Risk not found. It may have been deleted.'
+          : 'Failed to load risk details. Please try again.'
+      ))
       .finally(() => setLoading(false))
   }, [id])
 
-  // ── delete ────────────────────────────────────────────────────────────────
   async function handleDelete() {
     setDeleteLoading(true)
     try {
@@ -196,216 +291,166 @@ export default function DetailPage() {
     }
   }
 
-  // ── AI analysis ───────────────────────────────────────────────────────────
-  async function handleAskAi() {
-    if (!risk) return
-    setAiLoading(true)
-    setAiError(null)
-    setAiDescription(null)
-    setAiRecommendations(null)
+  if (loading) return <LoadingSkeleton />
+  if (error)   return <ErrorState message={error} navigate={navigate} />
 
-    const payload = {
-      title:       risk.title,
-      description: risk.description,
-      category:    risk.category,
-      severity:    risk.severity,
-      score:       risk.score,
-    }
+  const c           = scoreColour(risk.score ?? 0)
+  const isOverdue   = risk.dueDate && new Date(risk.dueDate) < new Date()
 
-    try {
-      if (aiTab === 'describe') {
-        const res = await describeRisk(payload)
-        setAiDescription(res.data)
-      } else {
-        const res = await recommendActions(payload)
-        setAiRecommendations(
-          Array.isArray(res.data)
-            ? res.data
-            : res.data?.recommendations ?? []
-        )
-      }
-    } catch (err) {
-      setAiError(
-        err.message === 'Network Error'
-          ? 'Cannot reach AI service. Make sure the AI service is running on port 5000.'
-          : err.response?.data?.error
-          ?? 'AI service unavailable. Please try again.'
-      )
-    } finally {
-      setAiLoading(false)
-    }
-  }
-
-  // ── loading skeleton ──────────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 font-sans">
-        <nav className="bg-primary h-16 shadow" />
-        <div className="max-w-4xl mx-auto px-6 py-8">
-          <div className="animate-pulse space-y-4">
-            <div className="h-6 bg-gray-200 rounded w-48" />
-            <div className="h-10 bg-gray-200 rounded w-2/3" />
-            <div className="bg-white rounded-xl border border-gray-200 p-6
-                            space-y-4">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="h-8 bg-gray-100 rounded" />
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // ── error state ───────────────────────────────────────────────────────────
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-50 font-sans flex items-center
-                      justify-center">
-        <div className="text-center p-8">
-          <p className="text-5xl mb-4">⚠️</p>
-          <h2 className="text-xl font-semibold text-gray-800 mb-2">
-            {error}
-          </h2>
-          <button
-            onClick={() => navigate('/risks')}
-            className="mt-4 px-6 py-2 bg-primary text-white text-sm
-                       rounded-lg hover:opacity-90 transition"
-          >
-            Back to Risk Register
-          </button>
-        </div>
-      </div>
-    )
-  }
-
-  // ══════════════════════════════════════════════════════════════════════════
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
 
-      {/* ── Navbar ── */}
-      <nav className="bg-primary text-white px-6 py-4 flex items-center
-                      justify-between shadow sticky top-0 z-10">
-        <div className="flex items-center gap-3">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-            className="w-6 h-6">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-          </svg>
-          <span className="text-lg font-semibold tracking-wide">
-            Risk Assessment Engine
-          </span>
-        </div>
-        <div className="flex gap-4 text-sm">
-          <button onClick={() => navigate('/')}
-            className="hover:underline opacity-80 hover:opacity-100">
-            Dashboard
-          </button>
-          <button onClick={() => navigate('/risks')}
-            className="hover:underline opacity-80 hover:opacity-100">
-            Risks
-          </button>
-          <button onClick={() => navigate('/analytics')}
-            className="hover:underline opacity-80 hover:opacity-100">
-            Analytics
-          </button>
-        </div>
-      </nav>
+      <Navbar navigate={navigate} />
 
-      <div className="max-w-4xl mx-auto px-6 py-8">
+      <div className="max-w-5xl mx-auto px-6 py-8">
 
         {/* ── Breadcrumb ── */}
         <div className="flex items-center gap-2 text-sm text-gray-500 mb-6">
           <button onClick={() => navigate('/risks')}
-            className="hover:text-primary hover:underline">
+            className="hover:text-primary transition">
             Risk Register
           </button>
-          <span>/</span>
-          <span className="text-gray-800 font-medium truncate max-w-xs">
+          <svg className="w-3 h-3" fill="none" stroke="currentColor"
+            strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round"
+              d="M9 5l7 7-7 7" />
+          </svg>
+          <span className="text-gray-700 font-medium truncate max-w-sm">
             {risk.title}
           </span>
         </div>
 
         {/* ── Page header ── */}
-        <div className="flex flex-col sm:flex-row sm:items-start
-                        sm:justify-between gap-4 mb-6">
-          <div className="flex-1">
-            <div className="flex flex-wrap items-center gap-2 mb-2">
-              <span className={`px-3 py-1 rounded-full text-xs font-semibold
-                ${SEVERITY_STYLES[risk.severity]
-                  ?? 'bg-gray-100 text-gray-600'}`}>
-                {risk.severity ?? '—'}
-              </span>
-              <span className={`px-3 py-1 rounded-full text-xs font-semibold
-                ${STATUS_STYLES[risk.status]
-                  ?? 'bg-gray-100 text-gray-600'}`}>
-                {risk.status ?? '—'}
-              </span>
-              {risk.category && (
-                <span className="px-3 py-1 rounded-full text-xs font-medium
-                                 bg-purple-50 text-purple-700
-                                 border border-purple-200">
-                  {risk.category}
-                </span>
-              )}
-            </div>
-            <h1 className="text-2xl font-bold text-gray-900">
-              {risk.title}
-            </h1>
-            <p className="text-sm text-gray-400 mt-1">
-              Risk ID #{risk.id} · Created {formatDateTime(risk.createdDate)}
-            </p>
-          </div>
+        <div className="bg-white rounded-2xl border border-gray-200
+                        shadow-sm px-6 py-5 mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-start
+                          sm:justify-between gap-4">
+            <div className="flex-1 min-w-0">
 
-          {/* action buttons */}
-          <div className="flex gap-2 shrink-0">
-            <button
-              onClick={() => navigate(`/risks/${id}/edit`)}
-              className="px-4 py-2 border border-primary text-primary
-                         text-sm rounded-lg hover:bg-blue-50 transition
-                         flex items-center gap-1.5"
-            >
-              ✏️ Edit
-            </button>
-            <button
-              onClick={() => setShowDeleteModal(true)}
-              className="px-4 py-2 border border-red-300 text-red-600
-                         text-sm rounded-lg hover:bg-red-50 transition
-                         flex items-center gap-1.5"
-            >
-              🗑️ Delete
-            </button>
+              {/* badges row */}
+              <div className="flex flex-wrap gap-2 mb-3">
+                {risk.severity && (
+                  <span className={`px-3 py-1 rounded-full text-xs
+                                   font-semibold ${SEVERITY_STYLES[risk.severity]
+                                   ?? 'bg-gray-100 text-gray-600'}`}>
+                    {risk.severity}
+                  </span>
+                )}
+                {risk.status && (
+                  <span className={`px-3 py-1 rounded-full text-xs
+                                   font-semibold ${STATUS_STYLES[risk.status]
+                                   ?? 'bg-gray-100 text-gray-600'}`}>
+                    {risk.status}
+                  </span>
+                )}
+                {risk.category && (
+                  <span className="px-3 py-1 rounded-full text-xs
+                                   font-semibold bg-purple-50 text-purple-700
+                                   border border-purple-200">
+                    {risk.category}
+                  </span>
+                )}
+                {isOverdue && (
+                  <span className="px-3 py-1 rounded-full text-xs
+                                   font-semibold bg-red-100 text-red-700
+                                   border border-red-200 animate-pulse">
+                    ⚠ Overdue
+                  </span>
+                )}
+              </div>
+
+              <h1 className="text-2xl font-bold text-gray-900 leading-tight
+                             mb-1">
+                {risk.title}
+              </h1>
+              <p className="text-xs text-gray-400">
+                Risk ID #{risk.id}
+                &nbsp;·&nbsp;
+                Created {formatDateTime(risk.createdDate)}
+                {risk.lastModifiedDate && (
+                  <>&nbsp;·&nbsp;Updated {formatDateTime(risk.lastModifiedDate)}</>
+                )}
+              </p>
+            </div>
+
+            {/* action buttons */}
+            <div className="flex gap-2 shrink-0">
+              <button
+                onClick={() => navigate(`/risks/${id}/edit`)}
+                className="flex items-center gap-2 px-4 py-2 border
+                           border-primary text-primary text-sm font-medium
+                           rounded-xl hover:bg-blue-50 transition"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor"
+                  strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round"
+                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0
+                       002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828
+                       15H9v-2.828l8.586-8.586z" />
+                </svg>
+                Edit
+              </button>
+              <button
+                onClick={() => setShowDeleteModal(true)}
+                className="flex items-center gap-2 px-4 py-2 border
+                           border-red-200 text-red-600 text-sm font-medium
+                           rounded-xl hover:bg-red-50 transition"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor"
+                  strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round"
+                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0
+                       01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0
+                       00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                Delete
+              </button>
+            </div>
           </div>
         </div>
 
+        {/* ── Main content grid ── */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-          {/* ── Left column: details ── */}
+          {/* ── Left: 2/3 width ── */}
           <div className="lg:col-span-2 space-y-6">
 
-            {/* main details card */}
-            <div className="bg-white rounded-xl border border-gray-200
+            {/* Risk Details card */}
+            <div className="bg-white rounded-2xl border border-gray-200
                             shadow-sm p-6">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase
-                             tracking-wider mb-4">
+              <h2 className="text-xs font-bold text-gray-400 uppercase
+                             tracking-widest mb-4">
                 Risk Details
               </h2>
 
               <FieldRow label="Description">
-                {risk.description
-                  ? <span className="leading-relaxed">{risk.description}</span>
-                  : <span className="text-gray-400 italic">No description</span>
-                }
+                {risk.description ? (
+                  <p className="leading-relaxed whitespace-pre-wrap">
+                    {risk.description}
+                  </p>
+                ) : (
+                  <span className="text-gray-400 italic">
+                    No description provided
+                  </span>
+                )}
               </FieldRow>
 
               <FieldRow label="Category">
-                {risk.category ?? '—'}
+                {risk.category ? (
+                  <span className="px-2.5 py-1 bg-purple-50 text-purple-700
+                                   border border-purple-200 rounded-lg
+                                   text-xs font-medium">
+                    {risk.category}
+                  </span>
+                ) : '—'}
               </FieldRow>
 
               <FieldRow label="Severity">
                 {risk.severity ? (
-                  <span className={`px-2 py-0.5 rounded text-xs font-semibold
-                    ${SEVERITY_STYLES[risk.severity]}`}>
+                  <span className={`px-2.5 py-1 rounded-lg text-xs
+                                   font-semibold
+                    ${SEVERITY_STYLES[risk.severity]
+                      ?? 'bg-gray-100 text-gray-600'}`}>
                     {risk.severity}
                   </span>
                 ) : '—'}
@@ -413,44 +458,43 @@ export default function DetailPage() {
 
               <FieldRow label="Status">
                 {risk.status ? (
-                  <span className={`px-2 py-0.5 rounded text-xs font-semibold
-                    ${STATUS_STYLES[risk.status]}`}>
+                  <span className={`px-2.5 py-1 rounded-lg text-xs
+                                   font-semibold
+                    ${STATUS_STYLES[risk.status]
+                      ?? 'bg-gray-100 text-gray-600'}`}>
                     {risk.status}
                   </span>
                 ) : '—'}
               </FieldRow>
 
               <FieldRow label="Owner">
-                {risk.owner
-                  ? (
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 bg-primary bg-opacity-10
-                                      rounded-full flex items-center
-                                      justify-center text-xs font-bold
-                                      text-primary">
-                        {risk.owner[0]?.toUpperCase()}
-                      </div>
-                      {risk.owner}
+                {risk.owner ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 bg-primary bg-opacity-10
+                                    rounded-full flex items-center justify-center
+                                    text-xs font-bold text-primary shrink-0">
+                      {risk.owner[0]?.toUpperCase()}
                     </div>
-                  ) : '—'
-                }
+                    <span>{risk.owner}</span>
+                  </div>
+                ) : '—'}
               </FieldRow>
 
               <FieldRow label="Due Date">
                 {risk.dueDate ? (
-                  <span className={
-                    new Date(risk.dueDate) < new Date()
-                      ? 'text-red-600 font-medium'
-                      : ''
-                  }>
-                    {formatDate(risk.dueDate)}
-                    {new Date(risk.dueDate) < new Date() && (
-                      <span className="ml-2 text-xs bg-red-100 text-red-600
-                                       px-1.5 py-0.5 rounded">
+                  <div className="flex items-center gap-2">
+                    <span className={isOverdue
+                      ? 'text-red-600 font-semibold'
+                      : 'text-gray-800'}>
+                      {formatDate(risk.dueDate)}
+                    </span>
+                    {isOverdue && (
+                      <span className="px-2 py-0.5 bg-red-100 text-red-600
+                                       text-xs font-medium rounded-full">
                         Overdue
                       </span>
                     )}
-                  </span>
+                  </div>
                 ) : '—'}
               </FieldRow>
 
@@ -463,11 +507,11 @@ export default function DetailPage() {
               </FieldRow>
             </div>
 
-            {/* mitigation plan card */}
-            <div className="bg-white rounded-xl border border-gray-200
+            {/* Mitigation Plan card */}
+            <div className="bg-white rounded-2xl border border-gray-200
                             shadow-sm p-6">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase
-                             tracking-wider mb-4">
+              <h2 className="text-xs font-bold text-gray-400 uppercase
+                             tracking-widest mb-4">
                 Mitigation Plan
               </h2>
               {risk.mitigationPlan ? (
@@ -476,301 +520,187 @@ export default function DetailPage() {
                   {risk.mitigationPlan}
                 </p>
               ) : (
-                <div className="flex items-center gap-3 py-4 text-gray-400">
-                  <span className="text-2xl">📋</span>
+                <div className="flex items-center gap-4 py-6 px-4
+                                bg-gray-50 rounded-xl border border-dashed
+                                border-gray-200">
+                  <div className="w-10 h-10 bg-gray-100 rounded-lg
+                                  flex items-center justify-center shrink-0
+                                  text-lg">
+                    📋
+                  </div>
                   <div>
-                    <p className="text-sm">No mitigation plan defined</p>
+                    <p className="text-sm font-medium text-gray-600">
+                      No mitigation plan defined
+                    </p>
                     <button
                       onClick={() => navigate(`/risks/${id}/edit`)}
                       className="text-xs text-primary hover:underline mt-0.5"
                     >
-                      Add one now
+                      Add a mitigation plan →
                     </button>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* ── AI Analysis card ── */}
-            <div className="bg-white rounded-xl border border-gray-200
-                            shadow-sm p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">🤖</span>
-                  <h2 className="text-sm font-semibold text-gray-500
-                                 uppercase tracking-wider">
-                    AI Analysis
-                  </h2>
-                </div>
-                <button
-                  onClick={handleAskAi}
-                  disabled={aiLoading}
-                  className="px-4 py-1.5 bg-primary text-white text-xs
-                             font-medium rounded-lg hover:opacity-90
-                             disabled:opacity-50 transition flex items-center
-                             gap-1.5"
-                >
-                  {aiLoading ? (
-                    <>
-                      <svg className="animate-spin h-3 w-3" fill="none"
-                        viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12"
-                          r="10" stroke="currentColor" strokeWidth="4"/>
-                        <path className="opacity-75" fill="currentColor"
-                          d="M4 12a8 8 0 018-8v8z"/>
-                      </svg>
-                      Analysing...
-                    </>
-                  ) : 'Ask AI'}
-                </button>
-              </div>
-
-              {/* tab switcher */}
-              <div className="flex gap-1 bg-gray-100 rounded-lg p-1 mb-4">
-                {[
-                  { key: 'describe',  label: '📝 Describe'    },
-                  { key: 'recommend', label: '💡 Recommend'   },
-                ].map(({ key, label }) => (
-                  <button
-                    key={key}
-                    onClick={() => {
-                      setAiTab(key)
-                      setAiDescription(null)
-                      setAiRecommendations(null)
-                      setAiError(null)
-                    }}
-                    className={`flex-1 py-1.5 text-xs font-medium rounded-md
-                                transition
-                                ${aiTab === key
-                                  ? 'bg-white text-primary shadow-sm'
-                                  : 'text-gray-500 hover:text-gray-700'}`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-
-              {/* loading skeleton */}
-              {aiLoading && (
-                <div className="animate-pulse space-y-3 py-2">
-                  <div className="h-4 bg-blue-100 rounded w-full" />
-                  <div className="h-4 bg-blue-100 rounded w-4/5" />
-                  <div className="h-4 bg-blue-100 rounded w-3/5" />
-                </div>
-              )}
-
-              {/* error */}
-              {aiError && !aiLoading && (
-                <div className="flex items-start gap-3 bg-red-50
-                                border border-red-200 rounded-lg px-4
-                                py-3 text-sm text-red-700">
-                  <span className="mt-0.5">⚠</span>
-                  <div>
-                    <p>{aiError}</p>
-                    <button onClick={handleAskAi}
-                      className="underline text-xs mt-1">
-                      Retry
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* describe result */}
-              {aiDescription && !aiLoading && (
-                <div className="bg-blue-50 border border-blue-100
-                                rounded-lg p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="w-2 h-2 bg-green-500 rounded-full" />
-                    <span className="text-xs text-gray-500">
-                      AI Description
-                      {aiDescription.generated_at && (
-                        <span className="ml-2">
-                          · {formatDateTime(aiDescription.generated_at)}
-                        </span>
-                      )}
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-700 leading-relaxed
-                                whitespace-pre-wrap">
-                    {aiDescription.description
-                      ?? aiDescription.content
-                      ?? JSON.stringify(aiDescription, null, 2)}
-                  </p>
-                  {aiDescription.meta?.model_used && (
-                    <p className="text-xs text-gray-400 mt-3">
-                      Model: {aiDescription.meta.model_used}
-                      {aiDescription.meta.cached && ' · cached'}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* recommend result */}
-              {aiRecommendations && !aiLoading && (
-                <div className="space-y-3">
-                  <p className="text-xs text-gray-500 mb-2">
-                    AI Recommendations
-                  </p>
-                  {aiRecommendations.length === 0 ? (
-                    <p className="text-sm text-gray-400">
-                      No recommendations returned.
-                    </p>
-                  ) : (
-                    aiRecommendations.map((rec, i) => (
-                      <div
-                        key={i}
-                        className={`p-4 rounded-lg text-sm
-                          ${PRIORITY_STYLES[rec.priority]
-                            ?? 'bg-gray-50 border-l-4 border-gray-300'}`}
-                      >
-                        <div className="flex items-center justify-between
-                                        mb-1">
-                          <span className="font-semibold text-xs uppercase
-                                           tracking-wide">
-                            {rec.action_type ?? `Action ${i + 1}`}
-                          </span>
-                          {rec.priority && (
-                            <span className="text-xs font-medium opacity-75">
-                              {rec.priority} Priority
-                            </span>
-                          )}
-                        </div>
-                        <p className="leading-relaxed">{rec.description}</p>
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
-
-              {/* placeholder when nothing has been asked yet */}
-              {!aiLoading && !aiError && !aiDescription
-                && !aiRecommendations && (
-                <div className="text-center py-8 text-gray-400">
-                  <p className="text-3xl mb-2">🤖</p>
-                  <p className="text-sm">
-                    Click <strong>Ask AI</strong> to get an AI-powered
-                    {aiTab === 'describe'
-                      ? ' description'
-                      : ' recommendations'} for this risk.
-                  </p>
-                </div>
-              )}
-            </div>
+            {/* AI Panel */}
+            <AiPanel riskData={risk} />
 
           </div>
 
-          {/* ── Right column: score + meta ── */}
+          {/* ── Right: 1/3 width ── */}
           <div className="space-y-6">
 
-            {/* score card */}
-            <div className="bg-white rounded-xl border border-gray-200
-                            shadow-sm p-6 flex flex-col items-center">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase
-                             tracking-wider mb-4 self-start">
+            {/* Score card */}
+            <div className="bg-white rounded-2xl border border-gray-200
+                            shadow-sm p-6">
+              <h2 className="text-xs font-bold text-gray-400 uppercase
+                             tracking-widest mb-5">
                 Risk Score
               </h2>
-              <div className="relative flex items-center justify-center
-                              mb-3">
+              <div className="flex flex-col items-center">
                 <ScoreRing score={risk.score ?? 0} />
+                <div className={`mt-4 px-4 py-2 rounded-xl text-sm
+                                 font-semibold ${c.bg} ${c.text}`}>
+                  {c.label}
+                </div>
+                {/* mini score bar */}
+                <div className="w-full mt-4">
+                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all
+                                 duration-700"
+                      style={{
+                        width: `${Math.min(risk.score ?? 0, 100)}%`,
+                        backgroundColor: c.ring,
+                      }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-xs text-gray-400
+                                  mt-1">
+                    <span>0</span>
+                    <span>50</span>
+                    <span>100</span>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-400 mt-3 text-center
+                              leading-relaxed">
+                  0–39 Low · 40–74 Moderate · 75–100 Critical
+                </p>
               </div>
-              <p className={`text-sm font-semibold
-                ${scoreTextColour(risk.score ?? 0)}`}>
-                {(risk.score ?? 0) >= 75 ? 'Critical Risk'
-                 : (risk.score ?? 0) >= 40 ? 'Moderate Risk'
-                 : 'Low Risk'}
-              </p>
-              <p className="text-xs text-gray-400 mt-1 text-center">
-                Score ranges: 0–39 Low · 40–74 Medium · 75–100 Critical
-              </p>
             </div>
 
-            {/* meta card */}
-            <div className="bg-white rounded-xl border border-gray-200
+            {/* Quick Info card */}
+            <div className="bg-white rounded-2xl border border-gray-200
                             shadow-sm p-6">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase
-                             tracking-wider mb-4">
+              <h2 className="text-xs font-bold text-gray-400 uppercase
+                             tracking-widest mb-4">
                 Quick Info
               </h2>
-              <div className="space-y-3">
-                <div>
-                  <p className="text-xs text-gray-400 mb-0.5">Severity</p>
-                  <span className={`px-2 py-1 rounded text-xs font-semibold
-                    ${SEVERITY_STYLES[risk.severity]
-                      ?? 'bg-gray-100 text-gray-600'}`}>
-                    {risk.severity ?? '—'}
-                  </span>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-400 mb-0.5">Status</p>
-                  <span className={`px-2 py-1 rounded text-xs font-semibold
-                    ${STATUS_STYLES[risk.status]
-                      ?? 'bg-gray-100 text-gray-600'}`}>
-                    {risk.status ?? '—'}
-                  </span>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-400 mb-0.5">Category</p>
-                  <p className="text-sm text-gray-700">
-                    {risk.category ?? '—'}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-400 mb-0.5">Owner</p>
-                  <p className="text-sm text-gray-700">
-                    {risk.owner ?? '—'}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-400 mb-0.5">Due Date</p>
-                  <p className="text-sm text-gray-700">
-                    {formatDate(risk.dueDate)}
-                  </p>
-                </div>
+              <div className="space-y-4">
+                {[
+                  { label: 'Severity', value: risk.severity,
+                    badge: SEVERITY_STYLES[risk.severity] },
+                  { label: 'Status', value: risk.status,
+                    badge: STATUS_STYLES[risk.status] },
+                ].map(({ label, value, badge }) => (
+                  <div key={label}>
+                    <p className="text-xs text-gray-400 mb-1">{label}</p>
+                    {value ? (
+                      <span className={`px-2.5 py-1 rounded-lg text-xs
+                                       font-semibold ${badge
+                                       ?? 'bg-gray-100 text-gray-600'}`}>
+                        {value}
+                      </span>
+                    ) : (
+                      <span className="text-sm text-gray-400">—</span>
+                    )}
+                  </div>
+                ))}
+                {[
+                  { label: 'Category', value: risk.category },
+                  { label: 'Owner',    value: risk.owner    },
+                  { label: 'Due Date', value: formatDate(risk.dueDate) },
+                ].map(({ label, value }) => (
+                  <div key={label}>
+                    <p className="text-xs text-gray-400 mb-0.5">{label}</p>
+                    <p className="text-sm text-gray-700 font-medium">
+                      {value ?? '—'}
+                    </p>
+                  </div>
+                ))}
               </div>
             </div>
 
-            {/* actions card */}
-            <div className="bg-white rounded-xl border border-gray-200
+            {/* Actions card */}
+            <div className="bg-white rounded-2xl border border-gray-200
                             shadow-sm p-6">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase
-                             tracking-wider mb-4">
+              <h2 className="text-xs font-bold text-gray-400 uppercase
+                             tracking-widest mb-4">
                 Actions
               </h2>
               <div className="space-y-2">
                 <button
                   onClick={() => navigate(`/risks/${id}/edit`)}
-                  className="w-full py-2.5 border border-primary text-primary
-                             text-sm rounded-lg hover:bg-blue-50 transition
-                             flex items-center justify-center gap-2"
+                  className="w-full py-2.5 bg-primary text-white text-sm
+                             font-medium rounded-xl hover:opacity-90
+                             transition flex items-center justify-center gap-2"
                 >
-                  ✏️ Edit Risk
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor"
+                    strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round"
+                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0
+                         002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828
+                         15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  Edit Risk
                 </button>
+
                 <button
                   onClick={() => navigate('/risks/new')}
-                  className="w-full py-2.5 border border-gray-300
-                             text-gray-600 text-sm rounded-lg
+                  className="w-full py-2.5 border border-gray-200
+                             text-gray-600 text-sm font-medium rounded-xl
                              hover:bg-gray-50 transition flex items-center
                              justify-center gap-2"
                 >
-                  ➕ Create New Risk
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor"
+                    strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round"
+                      d="M12 4v16m8-8H4" />
+                  </svg>
+                  New Risk
                 </button>
+
                 <button
                   onClick={() => navigate('/risks')}
-                  className="w-full py-2.5 border border-gray-300
-                             text-gray-600 text-sm rounded-lg
+                  className="w-full py-2.5 border border-gray-200
+                             text-gray-600 text-sm font-medium rounded-xl
                              hover:bg-gray-50 transition flex items-center
                              justify-center gap-2"
                 >
-                  ← Back to List
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor"
+                    strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round"
+                      d="M11 17l-5-5m0 0l5-5m-5 5h12" />
+                  </svg>
+                  Back to List
                 </button>
+
                 <button
                   onClick={() => setShowDeleteModal(true)}
                   className="w-full py-2.5 border border-red-200
-                             text-red-600 text-sm rounded-lg
+                             text-red-600 text-sm font-medium rounded-xl
                              hover:bg-red-50 transition flex items-center
                              justify-center gap-2"
                 >
-                  🗑️ Delete Risk
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor"
+                    strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round"
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0
+                         01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0
+                         00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                  Delete Risk
                 </button>
               </div>
             </div>
@@ -779,7 +709,6 @@ export default function DetailPage() {
         </div>
       </div>
 
-      {/* ── Delete confirmation modal ── */}
       {showDeleteModal && (
         <DeleteModal
           title={risk.title}
