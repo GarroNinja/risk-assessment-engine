@@ -1,39 +1,32 @@
-import { useEffect, useState, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useState, useCallback, useRef } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { getAllRisks, searchRisks, exportRisksCSV } from '../services/riskService'
 import LoadingSkeleton from '../components/LoadingSkeleton'
 import EmptyState from '../components/EmptyState'
 import StatusBadge from '../components/StatusBadge'
-import Pagination from '../components/Pagination'
 
-// ── constants ────────────────────────────────────────────────────────────────
+// constants 
 const PAGE_SIZE = 10
 
 const COLUMNS = [
-  { key: 'id',          label: 'ID',         sortable: true  },
-  { key: 'title',       label: 'Title',       sortable: true  },
-  { key: 'category',    label: 'Category',    sortable: true  },
-  { key: 'severity',    label: 'Severity',    sortable: true  },
-  { key: 'status',      label: 'Status',      sortable: true  },
-  { key: 'score',       label: 'Risk Score',  sortable: true  },
-  { key: 'owner',       label: 'Owner',       sortable: false },
-  { key: 'createdDate', label: 'Created',     sortable: true  },
-  { key: 'actions',     label: 'Actions',     sortable: false },
+  { key: 'id',          label: 'ID',        sortable: true  },
+  { key: 'title',       label: 'Title',     sortable: true  },
+  { key: 'category',    label: 'Category',  sortable: true  },
+  { key: 'severity',    label: 'Severity',  sortable: true  },
+  { key: 'status',      label: 'Status',    sortable: true  },
+  { key: 'score',       label: 'Score',     sortable: true  },
+  { key: 'owner',       label: 'Owner',     sortable: false },
+  { key: 'createdDate', label: 'Created',   sortable: true  },
+  { key: 'actions',     label: 'Actions',   sortable: false },
 ]
 
 const SEVERITY_COLOURS = {
-  HIGH:   'bg-red-100 text-red-800',
-  MEDIUM: 'bg-yellow-100 text-yellow-800',
-  LOW:    'bg-green-100 text-green-800',
+  HIGH:   'bg-red-100 text-red-700 border border-red-200',
+  MEDIUM: 'bg-yellow-100 text-yellow-700 border border-yellow-200',
+  LOW:    'bg-green-100 text-green-700 border border-green-200',
 }
 
-// ── helpers ──────────────────────────────────────────────────────────────────
-function scoreColour(score) {
-  if (score >= 75) return 'text-red-600 font-semibold'
-  if (score >= 40) return 'text-yellow-600 font-semibold'
-  return 'text-green-600 font-semibold'
-}
-
+//  helpers 
 function formatDate(dateStr) {
   if (!dateStr) return '—'
   return new Date(dateStr).toLocaleDateString('en-GB', {
@@ -41,7 +34,12 @@ function formatDate(dateStr) {
   })
 }
 
-// ── safe array extractor — handles all Spring Page response shapes ────────────
+function scoreColour(score) {
+  if (score >= 75) return 'text-red-600 font-bold'
+  if (score >= 40) return 'text-yellow-600 font-bold'
+  return 'text-green-600 font-bold'
+}
+
 function extractList(data) {
   if (!data) return []
   if (Array.isArray(data)) return data
@@ -50,119 +48,161 @@ function extractList(data) {
   return found ?? []
 }
 
-// ── debounce hook ─────────────────────────────────────────────────────────────
-function useDebounce(value, delay = 300) {
-  const [debounced, setDebounced] = useState(value)
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(value), delay)
-    return () => clearTimeout(t)
-  }, [value, delay])
-  return debounced
+//  components defined OUTSIDE to prevent remount 
+function Navbar({ navigate }) {
+  return (
+    <nav className="bg-primary text-white px-6 py-4 flex items-center
+                    justify-between shadow sticky top-0 z-20">
+      <div className="flex items-center gap-3">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          className="w-6 h-6">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+        </svg>
+        <span className="text-lg font-semibold tracking-wide">
+          Risk Assessment Engine
+        </span>
+      </div>
+      <div className="flex gap-4 text-sm">
+        <button onClick={() => navigate('/')}
+          className="hover:underline opacity-80 hover:opacity-100 transition">
+          Dashboard
+        </button>
+        <button onClick={() => navigate('/risks')}
+          className="underline font-semibold">
+          Risks
+        </button>
+        <button onClick={() => navigate('/analytics')}
+          className="hover:underline opacity-80 hover:opacity-100 transition">
+          Analytics
+        </button>
+      </div>
+    </nav>
+  )
 }
 
-// ── sort icon component — defined OUTSIDE to prevent remount ──────────────────
 function SortIcon({ colKey, sortBy, sortDir }) {
   if (sortBy !== colKey)
     return <span className="ml-1 text-gray-300 text-xs">↕</span>
   return (
-    <span className="ml-1 text-xs">
+    <span className="ml-1 text-xs text-primary">
       {sortDir === 'asc' ? '↑' : '↓'}
     </span>
   )
 }
 
-// ════════════════════════════════════════════════════════════════════════════
+function ActiveFilterBadge({ label, onRemove }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 px-3 py-1
+                     bg-blue-50 text-primary border border-blue-200
+                     rounded-full text-xs font-medium">
+      {label}
+      <button
+        onClick={onRemove}
+        className="hover:text-red-500 transition font-bold leading-none"
+        aria-label={`Remove ${label} filter`}
+      >
+        ×
+      </button>
+    </span>
+  )
+}
+
+// main component
 export default function ListPage() {
-  const navigate = useNavigate()
+  const navigate                      = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
 
-  // ── state ──────────────────────────────────────────────────────────────────
-  const [risks, setRisks]                   = useState([])
-  const [loading, setLoading]               = useState(true)
-  const [error, setError]                   = useState(null)
-  const [page, setPage]                     = useState(0)
-  const [totalPages, setTotalPages]         = useState(0)
-  const [totalElements, setTotalElements]   = useState(0)
-  const [sortBy, setSortBy]                 = useState('id')
-  const [sortDir, setSortDir]               = useState('asc')
-  const [searchInput, setSearchInput]       = useState('')
-  const [statusFilter, setStatusFilter]     = useState('')
-  const [severityFilter, setSeverityFilter] = useState('')
-  const [isSearching, setIsSearching]       = useState(false)
+  //  read initial state from URL params 
+  const [searchInput, setSearchInput]   = useState(searchParams.get('q')        ?? '')
+  const [statusFilter, setStatusFilter] = useState(searchParams.get('status')   ?? '')
+  const [severityFilter, setSeverityFilter] = useState(searchParams.get('severity') ?? '')
+  const [dateFrom, setDateFrom]         = useState(searchParams.get('dateFrom') ?? '')
+  const [dateTo, setDateTo]             = useState(searchParams.get('dateTo')   ?? '')
+  const [page, setPage]                 = useState(Number(searchParams.get('page') ?? 0))
+  const [sortBy, setSortBy]             = useState(searchParams.get('sortBy')   ?? 'id')
+  const [sortDir, setSortDir]           = useState(searchParams.get('sortDir')  ?? 'asc')
 
-  const searchQuery = useDebounce(searchInput, 300)
+  const [risks, setRisks]               = useState([])
+  const [loading, setLoading]           = useState(true)
+  const [error, setError]               = useState(null)
+  const [totalPages, setTotalPages]     = useState(0)
+  const [totalElements, setTotalElements] = useState(0)
+  const [showFilters, setShowFilters]   = useState(false)
 
-  // ── reset page to 0 when filters or search change ─────────────────────────
+  //  debounced search value 
+  const [debouncedSearch, setDebouncedSearch] = useState(searchInput)
+  const debounceRef = useRef(null)
+
+  useEffect(() => {
+    clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      setDebouncedSearch(searchInput)
+      setPage(0)
+    }, 300)
+    return () => clearTimeout(debounceRef.current)
+  }, [searchInput])
+
+  //  sync all filters to URL params
+  useEffect(() => {
+    const params = {}
+    if (debouncedSearch) params.q        = debouncedSearch
+    if (statusFilter)    params.status   = statusFilter
+    if (severityFilter)  params.severity = severityFilter
+    if (dateFrom)        params.dateFrom = dateFrom
+    if (dateTo)          params.dateTo   = dateTo
+    if (page > 0)        params.page     = String(page)
+    if (sortBy !== 'id') params.sortBy   = sortBy
+    if (sortDir !== 'asc') params.sortDir = sortDir
+    setSearchParams(params, { replace: true })
+  }, [debouncedSearch, statusFilter, severityFilter, dateFrom, dateTo,
+      page, sortBy, sortDir, setSearchParams])
+
+  //  reset page when filters change 
   useEffect(() => {
     setPage(0)
-  }, [searchQuery, statusFilter, severityFilter])
+  }, [debouncedSearch, statusFilter, severityFilter, dateFrom, dateTo])
 
-  // ── main fetch function ───────────────────────────────────────────────────
+  //  fetch risks 
   const fetchRisks = useCallback(async () => {
     setLoading(true)
     setError(null)
-
     try {
       let res
 
-      if (searchQuery.trim()) {
-        // ── search mode ──────────────────────────────────────────────────────
-        setIsSearching(true)
-        res = await searchRisks(searchQuery)
+      if (debouncedSearch.trim()) {
+        res = await searchRisks(debouncedSearch.trim())
         const list = extractList(res.data)
         setRisks(list)
-        setTotalPages(res.data?.totalPages   ?? 1)
+        setTotalPages(res.data?.totalPages    ?? 1)
         setTotalElements(res.data?.totalElements ?? list.length)
-
       } else {
-        // ── normal paginated fetch from GET /all ─────────────────────────────
-        setIsSearching(false)
         res = await getAllRisks(page, PAGE_SIZE, sortBy, sortDir)
-
-        /*
-         * Spring Page response shape:
-         * {
-         *   content:          [...],   ← the actual records
-         *   totalPages:       5,
-         *   totalElements:    48,
-         *   number:           0,       ← current page (0-indexed)
-         *   size:             10,
-         *   first:            true,
-         *   last:             false,
-         *   empty:            false
-         * }
-         */
-        const data = res.data
-        setRisks(extractList(data))
-        setTotalPages(data?.totalPages    ?? 1)
-        setTotalElements(data?.totalElements ?? 0)
+        setRisks(extractList(res.data))
+        setTotalPages(res.data?.totalPages    ?? 1)
+        setTotalElements(res.data?.totalElements ?? 0)
       }
-
     } catch (err) {
-      console.error('ListPage fetch error:', err)
+      console.error('ListPage error:', err)
       setError(
         err.message === 'Network Error'
           ? 'Cannot reach the server. Make sure the backend is running on port 8080.'
           : err.response?.status === 401
           ? 'Session expired. Please log in again.'
-          : err.response?.status === 403
-          ? 'You do not have permission to view this data.'
           : 'Failed to load risks. Please try again.'
       )
       setRisks([])
     } finally {
       setLoading(false)
     }
-  }, [page, sortBy, sortDir, searchQuery])
+  }, [page, sortBy, sortDir, debouncedSearch])
 
-  // ── run fetch on dependency change ────────────────────────────────────────
-  useEffect(() => {
-    fetchRisks()
-  }, [fetchRisks])
+  useEffect(() => { fetchRisks() }, [fetchRisks])
 
-  // ── sort handler ──────────────────────────────────────────────────────────
+  //  sort handler 
   function handleSort(key) {
     if (sortBy === key) {
-      setSortDir(prev => prev === 'asc' ? 'desc' : 'asc')
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     } else {
       setSortBy(key)
       setSortDir('asc')
@@ -170,21 +210,31 @@ export default function ListPage() {
     setPage(0)
   }
 
-  // ── page change handler ───────────────────────────────────────────────────
+  //  page change 
   function handlePageChange(newPage) {
     if (newPage < 0 || newPage >= totalPages) return
     setPage(newPage)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  // ── CSV export ────────────────────────────────────────────────────────────
+  //  clear all filters 
+  function clearAllFilters() {
+    setSearchInput('')
+    setStatusFilter('')
+    setSeverityFilter('')
+    setDateFrom('')
+    setDateTo('')
+    setPage(0)
+  }
+
+  //  CSV export 
   async function handleExport() {
     try {
       const res = await exportRisksCSV()
       const url = window.URL.createObjectURL(new Blob([res.data]))
       const a   = document.createElement('a')
       a.href    = url
-      a.download = `risks-export-${new Date().toISOString().split('T')[0]}.csv`
+      a.download = `risks-${new Date().toISOString().split('T')[0]}.csv`
       a.click()
       window.URL.revokeObjectURL(url)
     } catch {
@@ -192,48 +242,31 @@ export default function ListPage() {
     }
   }
 
-  // ── clear all filters ─────────────────────────────────────────────────────
-  function handleClearFilters() {
-    setSearchInput('')
-    setStatusFilter('')
-    setSeverityFilter('')
-    setPage(0)
-  }
-
-  // ── client-side filter for status and severity ────────────────────────────
+  //  client-side filter for status, severity, date range ──────────────────
   const visibleRisks = (Array.isArray(risks) ? risks : []).filter(r => {
-    const matchStatus   = statusFilter   ? r.status   === statusFilter   : true
-    const matchSeverity = severityFilter ? r.severity === severityFilter : true
-    return matchStatus && matchSeverity
+    if (statusFilter   && r.status   !== statusFilter)   return false
+    if (severityFilter && r.severity !== severityFilter) return false
+    if (dateFrom && r.createdDate) {
+      if (new Date(r.createdDate) < new Date(dateFrom)) return false
+    }
+    if (dateTo && r.createdDate) {
+      if (new Date(r.createdDate) > new Date(dateTo + 'T23:59:59')) return false
+    }
+    return true
   })
 
   const hasActiveFilters = searchInput || statusFilter || severityFilter
+                        || dateFrom || dateTo
 
-  // ══════════════════════════════════════════════════════════════════════════
+  const activeFilterCount = [
+    searchInput, statusFilter, severityFilter, dateFrom, dateTo,
+  ].filter(Boolean).length
+
+  // render
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
 
-      {/* ── Navbar ── */}
-      <nav className="bg-primary text-white px-6 py-4 flex items-center
-                      justify-between shadow sticky top-0 z-10">
-        <h1 className="text-lg font-medium tracking-wide">
-          Risk Assessment Engine
-        </h1>
-        <div className="flex gap-4 text-sm">
-          <button onClick={() => navigate('/')}
-            className="hover:underline opacity-80 hover:opacity-100">
-            Dashboard
-          </button>
-          <button onClick={() => navigate('/risks')}
-            className="underline font-semibold">
-            Risks
-          </button>
-          <button onClick={() => navigate('/analytics')}
-            className="hover:underline opacity-80 hover:opacity-100">
-            Analytics
-          </button>
-        </div>
-      </nav>
+      <Navbar navigate={navigate} />
 
       <div className="max-w-screen-xl mx-auto px-6 py-8">
 
@@ -241,137 +274,286 @@ export default function ListPage() {
         <div className="flex flex-col sm:flex-row sm:items-center
                         sm:justify-between gap-4 mb-6">
           <div>
-            <h2 className="text-2xl font-medium text-gray-800">
+            <h2 className="text-2xl font-bold text-gray-800">
               Risk Register
             </h2>
             <p className="text-sm text-gray-500 mt-1">
               {loading
                 ? 'Loading...'
                 : `${totalElements} risk${totalElements !== 1 ? 's' : ''} total`}
-              {isSearching && !loading && (
+              {debouncedSearch && !loading && (
                 <span className="ml-2 text-primary font-medium">
-                  — search results for "{searchQuery}"
+                  — results for "{debouncedSearch}"
                 </span>
               )}
             </p>
           </div>
-
           <div className="flex gap-2">
-            <button
-              onClick={handleExport}
-              className="px-4 py-2 border border-primary text-primary text-sm
-                         rounded hover:bg-blue-50 transition"
-            >
+            <button onClick={handleExport}
+              className="px-4 py-2 border border-gray-300 text-gray-600
+                         text-sm font-medium rounded-xl hover:bg-gray-50
+                         transition flex items-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor"
+                strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round"
+                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4
+                     4m0 0l-4-4m4 4V4" />
+              </svg>
               Export CSV
             </button>
-            <button
-              onClick={() => navigate('/risks/new')}
-              className="px-4 py-2 bg-primary text-white text-sm rounded
-                         hover:opacity-90 transition"
-            >
-              + New Risk
+            <button onClick={() => navigate('/risks/new')}
+              className="px-4 py-2 bg-primary text-white text-sm font-medium
+                         rounded-xl hover:opacity-90 transition flex items-center
+                         gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor"
+                strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round"
+                  d="M12 4v16m8-8H4" />
+              </svg>
+              New Risk
             </button>
           </div>
         </div>
 
-        {/* ── Search and filters ── */}
-        <div className="flex flex-col sm:flex-row gap-3 mb-5">
+        {/* ── Search + filter bar ── */}
+        <div className="bg-white rounded-2xl border border-gray-200
+                        shadow-sm p-4 mb-5">
 
-          {/* search input */}
-          <div className="relative flex-1">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2
-                             text-gray-400 text-sm">
-              🔍
-            </span>
-            <input
-              type="text"
-              placeholder="Search by title, category, owner..."
-              value={searchInput}
-              onChange={e => setSearchInput(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded
+          {/* primary row: search + filter toggle + clear */}
+          <div className="flex flex-col sm:flex-row gap-3">
+
+            {/* search input */}
+            <div className="relative flex-1">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2
+                              w-4 h-4 text-gray-400" fill="none"
+                stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round"
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                type="text"
+                placeholder="Search by title, category, owner..."
+                value={searchInput}
+                onChange={e => setSearchInput(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 border border-gray-200
+                           rounded-xl text-sm focus:outline-none
+                           focus:ring-2 focus:ring-primary focus:border-transparent
+                           transition"
+              />
+              {searchInput && (
+                <button
+                  onClick={() => setSearchInput('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2
+                             text-gray-400 hover:text-gray-600 transition
+                             text-lg leading-none"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+
+            {/* status dropdown */}
+            <select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+              className="px-3 py-2.5 border border-gray-200 rounded-xl
                          text-sm focus:outline-none focus:ring-2
-                         focus:ring-primary"
-            />
+                         focus:ring-primary bg-white text-gray-700
+                         cursor-pointer min-w-[140px]"
+            >
+              <option value="">All Statuses</option>
+              <option value="OPEN">Open</option>
+              <option value="MITIGATED">Mitigated</option>
+              <option value="CLOSED">Closed</option>
+            </select>
+
+            {/* severity dropdown */}
+            <select
+              value={severityFilter}
+              onChange={e => setSeverityFilter(e.target.value)}
+              className="px-3 py-2.5 border border-gray-200 rounded-xl
+                         text-sm focus:outline-none focus:ring-2
+                         focus:ring-primary bg-white text-gray-700
+                         cursor-pointer min-w-[140px]"
+            >
+              <option value="">All Severities</option>
+              <option value="HIGH">High</option>
+              <option value="MEDIUM">Medium</option>
+              <option value="LOW">Low</option>
+            </select>
+
+            {/* advanced filter toggle */}
+            <button
+              onClick={() => setShowFilters(v => !v)}
+              className={`px-4 py-2.5 border rounded-xl text-sm font-medium
+                          transition flex items-center gap-2 whitespace-nowrap
+                          ${showFilters
+                            ? 'border-primary text-primary bg-blue-50'
+                            : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor"
+                strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round"
+                  d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707
+                     L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017
+                     21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
+              </svg>
+              Filters
+              {activeFilterCount > 0 && (
+                <span className="bg-primary text-white text-xs w-5 h-5
+                                 rounded-full flex items-center justify-center
+                                 font-bold">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+
+            {/* clear all */}
+            {hasActiveFilters && (
+              <button
+                onClick={clearAllFilters}
+                className="px-4 py-2.5 border border-red-200 text-red-600
+                           text-sm font-medium rounded-xl hover:bg-red-50
+                           transition whitespace-nowrap"
+              >
+                Clear All
+              </button>
+            )}
           </div>
 
-          {/* status filter */}
-          <select
-            value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded text-sm
-                       focus:outline-none focus:ring-2 focus:ring-primary
-                       bg-white"
-          >
-            <option value="">All Statuses</option>
-            <option value="OPEN">Open</option>
-            <option value="MITIGATED">Mitigated</option>
-            <option value="CLOSED">Closed</option>
-          </select>
+          {/* ── Date range picker — shown when filters expanded ── */}
+          {showFilters && (
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <p className="text-xs font-semibold text-gray-500 uppercase
+                            tracking-wider mb-3">
+                Date Range (Created Date)
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 items-start
+                              sm:items-center">
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-gray-500 whitespace-nowrap">
+                    From
+                  </label>
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    max={dateTo || undefined}
+                    onChange={e => setDateFrom(e.target.value)}
+                    className="px-3 py-2 border border-gray-200 rounded-xl
+                               text-sm focus:outline-none focus:ring-2
+                               focus:ring-primary bg-white cursor-pointer"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-gray-500 whitespace-nowrap">
+                    To
+                  </label>
+                  <input
+                    type="date"
+                    value={dateTo}
+                    min={dateFrom || undefined}
+                    onChange={e => setDateTo(e.target.value)}
+                    className="px-3 py-2 border border-gray-200 rounded-xl
+                               text-sm focus:outline-none focus:ring-2
+                               focus:ring-primary bg-white cursor-pointer"
+                  />
+                </div>
+                {(dateFrom || dateTo) && (
+                  <button
+                    onClick={() => { setDateFrom(''); setDateTo('') }}
+                    className="text-xs text-red-500 hover:underline"
+                  >
+                    Clear dates
+                  </button>
+                )}
+              </div>
 
-          {/* severity filter */}
-          <select
-            value={severityFilter}
-            onChange={e => setSeverityFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded text-sm
-                       focus:outline-none focus:ring-2 focus:ring-primary
-                       bg-white"
-          >
-            <option value="">All Severities</option>
-            <option value="HIGH">High</option>
-            <option value="MEDIUM">Medium</option>
-            <option value="LOW">Low</option>
-          </select>
+              {/* date range summary */}
+              {(dateFrom || dateTo) && (
+                <p className="text-xs text-gray-500 mt-2">
+                  Showing risks created
+                  {dateFrom && <strong> from {formatDate(dateFrom)}</strong>}
+                  {dateTo   && <strong> to {formatDate(dateTo)}</strong>}
+                </p>
+              )}
+            </div>
+          )}
 
-          {/* clear filters */}
+          {/* ── Active filter badges ── */}
           {hasActiveFilters && (
-            <button
-              onClick={handleClearFilters}
-              className="px-3 py-2 text-sm text-gray-500 hover:text-gray-800
-                         border border-gray-300 rounded hover:bg-gray-50
-                         transition whitespace-nowrap"
-            >
-              ✕ Clear
-            </button>
+            <div className="flex flex-wrap gap-2 mt-3 pt-3
+                            border-t border-gray-100">
+              {searchInput && (
+                <ActiveFilterBadge
+                  label={`Search: "${searchInput}"`}
+                  onRemove={() => setSearchInput('')}
+                />
+              )}
+              {statusFilter && (
+                <ActiveFilterBadge
+                  label={`Status: ${statusFilter}`}
+                  onRemove={() => setStatusFilter('')}
+                />
+              )}
+              {severityFilter && (
+                <ActiveFilterBadge
+                  label={`Severity: ${severityFilter}`}
+                  onRemove={() => setSeverityFilter('')}
+                />
+              )}
+              {dateFrom && (
+                <ActiveFilterBadge
+                  label={`From: ${formatDate(dateFrom)}`}
+                  onRemove={() => setDateFrom('')}
+                />
+              )}
+              {dateTo && (
+                <ActiveFilterBadge
+                  label={`To: ${formatDate(dateTo)}`}
+                  onRemove={() => setDateTo('')}
+                />
+              )}
+            </div>
           )}
         </div>
 
         {/* ── Error banner ── */}
         {error && (
           <div className="mb-5 px-4 py-3 bg-red-50 border border-red-200
-                          text-red-700 rounded flex items-center
+                          text-red-700 rounded-xl flex items-center
                           justify-between text-sm">
-            <span>⚠ {error}</span>
-            <button
-              onClick={fetchRisks}
-              className="ml-4 underline font-medium hover:text-red-900"
-            >
+            <div className="flex items-center gap-2">
+              <span>⚠</span>
+              <span>{error}</span>
+            </div>
+            <button onClick={fetchRisks}
+              className="underline font-medium ml-4 hover:text-red-900">
               Retry
             </button>
           </div>
         )}
 
         {/* ── Table card ── */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200
-                        overflow-hidden">
+        <div className="bg-white rounded-2xl border border-gray-200
+                        shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
 
-              {/* thead */}
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   {COLUMNS.map(col => (
                     <th
                       key={col.key}
                       onClick={() => col.sortable && handleSort(col.key)}
-                      className={`
-                        px-4 py-3 text-left text-xs font-semibold
-                        text-gray-500 uppercase tracking-wider
-                        whitespace-nowrap select-none
-                        ${col.sortable
-                          ? 'cursor-pointer hover:bg-gray-100 hover:text-gray-700'
-                          : ''}
-                        ${sortBy === col.key ? 'text-primary bg-blue-50' : ''}
-                      `}
+                      className={`px-4 py-3 text-left text-xs font-semibold
+                                  text-gray-500 uppercase tracking-wider
+                                  whitespace-nowrap select-none
+                                  ${col.sortable
+                                    ? 'cursor-pointer hover:bg-gray-100'
+                                    : ''}
+                                  ${sortBy === col.key
+                                    ? 'text-primary bg-blue-50'
+                                    : ''}`}
                     >
                       {col.label}
                       {col.sortable && (
@@ -386,10 +568,8 @@ export default function ListPage() {
                 </tr>
               </thead>
 
-              {/* tbody */}
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-50">
 
-                {/* loading state */}
                 {loading && (
                   <tr>
                     <td colSpan={COLUMNS.length} className="px-4 py-6">
@@ -398,52 +578,47 @@ export default function ListPage() {
                   </tr>
                 )}
 
-                {/* empty state */}
                 {!loading && visibleRisks.length === 0 && (
                   <tr>
                     <td colSpan={COLUMNS.length}>
                       <EmptyState
                         message={
-                          searchInput
-                            ? `No risks found matching "${searchInput}"`
-                            : hasActiveFilters
-                            ? 'No risks match the selected filters.'
-                            : 'No risks recorded yet. Click + New Risk to add one.'
+                          hasActiveFilters
+                            ? 'No risks match your current filters.'
+                            : 'No risks recorded yet. Click New Risk to add one.'
                         }
                       />
                     </td>
                   </tr>
                 )}
 
-                {/* data rows */}
                 {!loading && visibleRisks.map(risk => (
                   <tr
                     key={risk.id}
                     onClick={() => navigate(`/risks/${risk.id}`)}
-                    className="hover:bg-blue-50 transition-colors cursor-pointer"
+                    className="hover:bg-blue-50 transition-colors
+                               cursor-pointer group"
                   >
-                    {/* ID */}
-                    <td className="px-4 py-3 text-gray-400 font-mono text-xs">
+                    <td className="px-4 py-3 text-gray-400 font-mono
+                                   text-xs">
                       #{risk.id}
                     </td>
 
-                    {/* Title */}
-                    <td className="px-4 py-3 font-medium text-gray-800
-                                   max-w-xs">
-                      <div className="truncate" title={risk.title}>
+                    <td className="px-4 py-3 max-w-[200px]">
+                      <p className="font-semibold text-gray-800 truncate
+                                    group-hover:text-primary transition">
                         {risk.title}
-                      </div>
+                      </p>
                     </td>
 
-                    {/* Category */}
                     <td className="px-4 py-3 text-gray-600">
                       {risk.category ?? '—'}
                     </td>
 
-                    {/* Severity */}
                     <td className="px-4 py-3">
                       {risk.severity ? (
-                        <span className={`px-2 py-1 rounded text-xs font-medium
+                        <span className={`px-2.5 py-1 rounded-lg text-xs
+                                         font-semibold
                           ${SEVERITY_COLOURS[risk.severity]
                             ?? 'bg-gray-100 text-gray-600'}`}>
                           {risk.severity}
@@ -451,17 +626,17 @@ export default function ListPage() {
                       ) : '—'}
                     </td>
 
-                    {/* Status */}
                     <td className="px-4 py-3">
                       <StatusBadge value={risk.status} />
                     </td>
 
-                    {/* Score */}
-                    <td className={`px-4 py-3 ${scoreColour(risk.score)}`}>
+                    <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <span>{risk.score ?? '—'}</span>
+                        <span className={scoreColour(risk.score ?? 0)}>
+                          {risk.score ?? '—'}
+                        </span>
                         {risk.score != null && (
-                          <div className="w-12 h-1.5 bg-gray-100 rounded-full
+                          <div className="w-10 h-1.5 bg-gray-100 rounded-full
                                           overflow-hidden">
                             <div
                               className={`h-full rounded-full
@@ -477,34 +652,29 @@ export default function ListPage() {
                       </div>
                     </td>
 
-                    {/* Owner */}
                     <td className="px-4 py-3 text-gray-600">
                       {risk.owner ?? '—'}
                     </td>
 
-                    {/* Created Date */}
                     <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
                       {formatDate(risk.createdDate)}
                     </td>
 
-                    {/* Actions */}
-                    <td className="px-4 py-3">
-                      <div
-                        className="flex gap-2"
-                        onClick={e => e.stopPropagation()}
-                      >
+                    <td className="px-4 py-3"
+                      onClick={e => e.stopPropagation()}>
+                      <div className="flex gap-1.5">
                         <button
                           onClick={() => navigate(`/risks/${risk.id}/edit`)}
-                          className="px-3 py-1 text-xs border border-primary
-                                     text-primary rounded hover:bg-blue-50
+                          className="px-2.5 py-1 text-xs border border-primary
+                                     text-primary rounded-lg hover:bg-blue-50
                                      transition"
                         >
                           Edit
                         </button>
                         <button
                           onClick={() => navigate(`/risks/${risk.id}`)}
-                          className="px-3 py-1 text-xs border border-gray-300
-                                     text-gray-600 rounded hover:bg-gray-50
+                          className="px-2.5 py-1 text-xs border border-gray-200
+                                     text-gray-600 rounded-lg hover:bg-gray-50
                                      transition"
                         >
                           View
@@ -517,81 +687,71 @@ export default function ListPage() {
             </table>
           </div>
 
-          {/* ── Pagination footer ── */}
+          {/* ── Pagination ── */}
           {!loading && totalPages > 1 && (
-            <div className="px-6 py-3 border-t border-gray-200 bg-gray-50
+            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50
                             flex flex-col sm:flex-row items-center
                             justify-between gap-3">
-
-              {/* record count info */}
               <p className="text-xs text-gray-500">
                 Showing{' '}
-                <span className="font-medium text-gray-700">
+                <span className="font-semibold text-gray-700">
                   {page * PAGE_SIZE + 1}
                 </span>
-                {' '}–{' '}
-                <span className="font-medium text-gray-700">
+                {' – '}
+                <span className="font-semibold text-gray-700">
                   {Math.min((page + 1) * PAGE_SIZE, totalElements)}
                 </span>
-                {' '}of{' '}
-                <span className="font-medium text-gray-700">
+                {' of '}
+                <span className="font-semibold text-gray-700">
                   {totalElements}
                 </span>
-                {' '}risks
+                {' risks'}
               </p>
 
-              {/* page controls */}
               <div className="flex items-center gap-1">
-
-                {/* first page */}
                 <button
                   onClick={() => handlePageChange(0)}
                   disabled={page === 0}
-                  className="px-2 py-1 text-xs border border-gray-300 rounded
-                             disabled:opacity-40 hover:bg-gray-100 transition"
+                  className="px-2.5 py-1.5 text-xs border border-gray-200
+                             rounded-lg disabled:opacity-40 hover:bg-gray-100
+                             transition"
                   title="First page"
-                >
-                  «
-                </button>
+                >«</button>
 
-                {/* previous page */}
                 <button
                   onClick={() => handlePageChange(page - 1)}
                   disabled={page === 0}
-                  className="px-3 py-1 text-xs border border-gray-300 rounded
-                             disabled:opacity-40 hover:bg-gray-100 transition"
-                >
-                  Prev
-                </button>
+                  className="px-3 py-1.5 text-xs border border-gray-200
+                             rounded-lg disabled:opacity-40 hover:bg-gray-100
+                             transition"
+                >Prev</button>
 
-                {/* page number pills */}
                 {Array.from({ length: totalPages }, (_, i) => i)
                   .filter(i =>
-                    i === 0 ||
-                    i === totalPages - 1 ||
+                    i === 0 || i === totalPages - 1 ||
                     Math.abs(i - page) <= 1
                   )
                   .reduce((acc, i, idx, arr) => {
-                    if (idx > 0 && i - arr[idx - 1] > 1) {
+                    if (idx > 0 && i - arr[idx - 1] > 1)
                       acc.push('...')
-                    }
                     acc.push(i)
                     return acc
                   }, [])
                   .map((item, idx) =>
                     item === '...' ? (
-                      <span key={`ellipsis-${idx}`}
-                        className="px-2 py-1 text-xs text-gray-400">
+                      <span key={`e-${idx}`}
+                        className="px-2 text-xs text-gray-400">
                         ...
                       </span>
                     ) : (
                       <button
                         key={item}
                         onClick={() => handlePageChange(item)}
-                        className={`px-3 py-1 text-xs border rounded transition
+                        className={`px-3 py-1.5 text-xs border rounded-lg
+                                    transition
                           ${page === item
                             ? 'bg-primary text-white border-primary'
-                            : 'border-gray-300 hover:bg-gray-100'}`}
+                            : 'border-gray-200 hover:bg-gray-100'}`}
                       >
                         {item + 1}
                       </button>
@@ -599,38 +759,36 @@ export default function ListPage() {
                   )
                 }
 
-                {/* next page */}
                 <button
                   onClick={() => handlePageChange(page + 1)}
                   disabled={page + 1 >= totalPages}
-                  className="px-3 py-1 text-xs border border-gray-300 rounded
-                             disabled:opacity-40 hover:bg-gray-100 transition"
-                >
-                  Next
-                </button>
+                  className="px-3 py-1.5 text-xs border border-gray-200
+                             rounded-lg disabled:opacity-40 hover:bg-gray-100
+                             transition"
+                >Next</button>
 
-                {/* last page */}
                 <button
                   onClick={() => handlePageChange(totalPages - 1)}
                   disabled={page + 1 >= totalPages}
-                  className="px-2 py-1 text-xs border border-gray-300 rounded
-                             disabled:opacity-40 hover:bg-gray-100 transition"
+                  className="px-2.5 py-1.5 text-xs border border-gray-200
+                             rounded-lg disabled:opacity-40 hover:bg-gray-100
+                             transition"
                   title="Last page"
-                >
-                  »
-                </button>
+                >»</button>
               </div>
             </div>
           )}
-        </div>
 
-        {/* ── page size info when only 1 page ── */}
-        {!loading && totalPages <= 1 && visibleRisks.length > 0 && (
-          <p className="text-xs text-gray-400 text-right mt-2">
-            Showing all {visibleRisks.length} risk
-            {visibleRisks.length !== 1 ? 's' : ''}
-          </p>
-        )}
+          {/* single page count */}
+          {!loading && totalPages <= 1 && visibleRisks.length > 0 && (
+            <div className="px-6 py-3 border-t border-gray-100 bg-gray-50">
+              <p className="text-xs text-gray-400">
+                Showing all {visibleRisks.length} risk
+                {visibleRisks.length !== 1 ? 's' : ''}
+              </p>
+            </div>
+          )}
+        </div>
 
       </div>
     </div>
