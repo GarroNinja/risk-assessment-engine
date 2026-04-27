@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 
+from cache import AiCache, NullCache, build_key
 from clients import GroqClient, GroqError
 from prompts.categorise_prompts import (
     CATEGORISE_SYSTEM_V1,
@@ -19,17 +20,37 @@ from schemas.categorise import (
 
 log = logging.getLogger(__name__)
 
+_CACHE_NS = "categorise"
+
 
 class CategoriserError(Exception):
     pass
 
 
 class Categoriser:
-    def __init__(self, groq: GroqClient, prompt_version: str = "v2") -> None:
+    def __init__(
+        self,
+        groq: GroqClient,
+        cache: AiCache | None = None,
+        prompt_version: str = "v2",
+        cache_ttl_s: int = 900,
+    ) -> None:
         self._groq = groq
+        self._cache = cache or NullCache()
         self._prompt_version = prompt_version
+        self._cache_ttl = cache_ttl_s
 
     def categorise(self, req: CategoriseRequest) -> CategoriseResult:
+        key = build_key(_CACHE_NS, self._prompt_version, {
+            "title": req.title,
+            "description": req.description,
+            "context": req.context,
+        })
+        cached = self._cache.get(key)
+        if cached is not None:
+            log.info("categorise cache hit")
+            return CategoriseResult(**cached)
+
         if self._prompt_version == "v1":
             system = CATEGORISE_SYSTEM_V1
             user = build_categorise_user_v1(req.title, req.description, req.context)
@@ -51,7 +72,9 @@ class Categoriser:
             raise CategoriserError(f"groq call failed: {exc}") from exc
 
         content = resp["choices"][0]["message"]["content"]
-        return _parse_result(content)
+        result = _parse_result(content)
+        self._cache.set(key, result.to_dict(), ttl_s=self._cache_ttl)
+        return result
 
 
 def _parse_result(content: str) -> CategoriseResult:
