@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { login } from '../services/authService'
 
-// ── validation ────────────────────────────────────────────────────────────────
+//  validation 
 function validate(form) {
   const errors = {}
   if (!form.email.trim())
@@ -17,7 +17,7 @@ function validate(form) {
   return errors
 }
 
-// ── input field — defined OUTSIDE to prevent focus loss ───────────────────────
+// input field — defined OUTSIDE to prevent focus loss
 function InputField({ label, name, type, value, onChange, onBlur,
                       placeholder, error, touched }) {
   return (
@@ -52,17 +52,17 @@ function InputField({ label, name, type, value, onChange, onBlur,
 
 // ════════════════════════════════════════════════════════════════════════════
 export default function LoginPage() {
-  const navigate      = useNavigate()
+  const navigate              = useNavigate()
   const { login: storeToken } = useAuth()
 
-  const [form, setForm]     = useState({ email: '', password: '' })
-  const [errors, setErrors] = useState({})
-  const [touched, setTouched] = useState({})
-  const [loading, setLoading] = useState(false)
+  const [form, setForm]           = useState({ email: '', password: '' })
+  const [errors, setErrors]       = useState({})
+  const [touched, setTouched]     = useState({})
+  const [loading, setLoading]     = useState(false)
   const [loginError, setLoginError] = useState(null)
   const [showPassword, setShowPassword] = useState(false)
 
-  // ── handlers ──────────────────────────────────────────────────────────────
+  //  handlers 
   function handleChange(e) {
     const { name, value } = e.target
     const updated = { ...form, [name]: value }
@@ -89,7 +89,6 @@ export default function LoginPage() {
   async function handleSubmit(e) {
     e.preventDefault()
 
-    // mark all touched
     setTouched({ email: true, password: true })
     const validationErrors = validate(form)
     setErrors(validationErrors)
@@ -101,8 +100,6 @@ export default function LoginPage() {
     try {
       const res = await login(form.email, form.password)
 
-      // ── extract JWT from response ──────────────────────────────────────────
-      // handles: { token: '...' } or { jwt: '...' } or { accessToken: '...' }
       const token = res.data?.token
                  ?? res.data?.jwt
                  ?? res.data?.accessToken
@@ -112,10 +109,7 @@ export default function LoginPage() {
         throw new Error('Invalid token received from server.')
       }
 
-      // store token in AuthContext + localStorage
       storeToken(token)
-
-      // redirect to dashboard
       navigate('/', { replace: true })
 
     } catch (err) {
@@ -180,6 +174,7 @@ export default function LoginPage() {
           </div>
         )}
 
+        {/* form */}
         <form onSubmit={handleSubmit} noValidate>
           <div className="space-y-5">
 
@@ -211,14 +206,13 @@ export default function LoginPage() {
                   onBlur={handleBlur}
                   placeholder="Enter your password"
                   autoComplete="current-password"
-                  className={`w-full px-3 py-2.5 pr-10 border rounded text-sm
-                              focus:outline-none focus:ring-2 focus:ring-primary
-                              transition
+                  className={`w-full px-3 py-2.5 pr-10 border rounded
+                              text-sm focus:outline-none focus:ring-2
+                              focus:ring-primary transition
                               ${touched.password && errors.password
                                 ? 'border-red-400 bg-red-50 focus:ring-red-400'
                                 : 'border-gray-300 bg-white'}`}
                 />
-                {/* show/hide password toggle */}
                 <button
                   type="button"
                   onClick={() => setShowPassword(prev => !prev)}
@@ -236,7 +230,7 @@ export default function LoginPage() {
               )}
             </div>
 
-            {/* Submit button */}
+            {/* Submit */}
             <button
               type="submit"
               disabled={loading}
@@ -268,7 +262,20 @@ export default function LoginPage() {
           <div className="flex-1 h-px bg-gray-200" />
         </div>
 
-        {/* demo credentials hint */}
+        {/* register link — OUTSIDE form */}
+        <div className="text-center mb-5">
+          <p className="text-sm text-gray-500">
+            Don't have an account?{' '}
+            <Link
+              to="/register"
+              className="font-semibold text-primary hover:underline"
+            >
+              Register
+            </Link>
+          </p>
+        </div>
+
+        {/* demo credentials */}
         <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
           <p className="text-xs font-semibold text-primary mb-2">
             Demo Credentials
@@ -293,7 +300,7 @@ export default function LoginPage() {
 
       {/* footer */}
       <p className="mt-6 text-xs text-gray-400">
-         Risk Assessment Engine 
+        Risk Assessment Engine
       </p>
 
     </div>

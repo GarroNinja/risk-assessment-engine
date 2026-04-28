@@ -581,13 +581,22 @@ export default function ListPage() {
                 {!loading && visibleRisks.length === 0 && (
                   <tr>
                     <td colSpan={COLUMNS.length}>
-                      <EmptyState
-                        message={
-                          hasActiveFilters
-                            ? 'No risks match your current filters.'
-                            : 'No risks recorded yet. Click New Risk to add one.'
-                        }
-                      />
+                        <EmptyState  type={hasActiveFilters ? 'noresults' : 'nodata'}
+                          message={ hasActiveFilters
+                                   ? 'No risks match your current filters.'
+                                   : 'No risks recorded yet.'
+                                  }
+                                  action={
+                                   !hasActiveFilters && (
+                                   <button  onClick={() => navigate('/risks/new')}
+                                    className="px-5 py-2.5 bg-primary text-white text-sm
+                                    font-medium rounded-xl hover:opacity-90 transition"
+                                   >
+                                   + Create First Risk
+                                   </button>
+                                   )
+                                  }
+                         />
                     </td>
                   </tr>
                 )}
