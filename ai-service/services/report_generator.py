@@ -6,13 +6,13 @@ from typing import Iterator
 
 from cache import AiCache, NullCache, build_key
 from clients import GroqClient, GroqError
-from prompts.report_prompts import REPORT_SYSTEM_V1, build_report_user_v1
+from prompts.report_prompts import REPORT_SYSTEM_V2, build_report_user_v2
 from schemas.report import ReportRequest, ReportResult
 
 log = logging.getLogger(__name__)
 
 _CACHE_NS = "report"
-_CACHE_VERSION = "v1"
+_CACHE_VERSION = "v2"
 
 
 class ReportGeneratorError(Exception):
@@ -32,10 +32,10 @@ class ReportGenerator:
 
     def _messages(self, req: ReportRequest) -> list[dict[str, str]]:
         return [
-            {"role": "system", "content": REPORT_SYSTEM_V1},
+            {"role": "system", "content": REPORT_SYSTEM_V2},
             {
                 "role": "user",
-                "content": build_report_user_v1(
+                "content": build_report_user_v2(
                     risks=[asdict(r) for r in req.risks],
                     audience=req.audience,
                     fmt=req.format,

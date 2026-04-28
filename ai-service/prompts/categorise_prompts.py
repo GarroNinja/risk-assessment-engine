@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
+
 from schemas.categorise import ALLOWED_CATEGORIES, ALLOWED_SEVERITY
+from prompts.examples import CATEGORISE_FEW_SHOT
 
 CATEGORISE_SYSTEM_V1 = (
     "You classify software security risks into OWASP Top 10 (2021) categories. "
@@ -19,6 +22,21 @@ CATEGORISE_SYSTEM_V2 = (
     "- If signal is weak or ambiguous, prefer category=OTHER and confidence < 0.5.\n"
     "- Output strictly valid JSON. No code fences, no prose, no trailing commas."
 )
+
+
+def _few_shot_block() -> str:
+    chunks = []
+    for ex in CATEGORISE_FEW_SHOT:
+        chunks.append(
+            "Example:\n"
+            f"Title: {ex['title']}\n"
+            f"Description: {ex['description']}\n"
+            f"JSON: {json.dumps(ex['expected'], separators=(',', ':'))}"
+        )
+    return "\n\n".join(chunks)
+
+
+CATEGORISE_SYSTEM_V3 = CATEGORISE_SYSTEM_V2 + "\n\n" + _few_shot_block()
 
 
 def build_categorise_user_v1(title: str, description: str, context: str) -> str:
@@ -58,3 +76,6 @@ def build_categorise_user_v2(title: str, description: str, context: str) -> str:
         '  "tags": ["kebab-case", "..."]\n'
         "}"
     )
+
+
+build_categorise_user_v3 = build_categorise_user_v2

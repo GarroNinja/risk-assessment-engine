@@ -8,8 +8,10 @@ from clients import GroqClient, GroqError
 from prompts.categorise_prompts import (
     CATEGORISE_SYSTEM_V1,
     CATEGORISE_SYSTEM_V2,
+    CATEGORISE_SYSTEM_V3,
     build_categorise_user_v1,
     build_categorise_user_v2,
+    build_categorise_user_v3,
 )
 from schemas.categorise import (
     ALLOWED_CATEGORIES,
@@ -32,13 +34,29 @@ class Categoriser:
         self,
         groq: GroqClient,
         cache: AiCache | None = None,
-        prompt_version: str = "v2",
+        prompt_version: str = "v3",
         cache_ttl_s: int = 900,
     ) -> None:
         self._groq = groq
         self._cache = cache or NullCache()
         self._prompt_version = prompt_version
         self._cache_ttl = cache_ttl_s
+
+    def _build_messages(self, req: CategoriseRequest) -> list[dict[str, str]]:
+        if self._prompt_version == "v1":
+            return [
+                {"role": "system", "content": CATEGORISE_SYSTEM_V1},
+                {"role": "user", "content": build_categorise_user_v1(req.title, req.description, req.context)},
+            ]
+        if self._prompt_version == "v2":
+            return [
+                {"role": "system", "content": CATEGORISE_SYSTEM_V2},
+                {"role": "user", "content": build_categorise_user_v2(req.title, req.description, req.context)},
+            ]
+        return [
+            {"role": "system", "content": CATEGORISE_SYSTEM_V3},
+            {"role": "user", "content": build_categorise_user_v3(req.title, req.description, req.context)},
+        ]
 
     def categorise(self, req: CategoriseRequest) -> CategoriseResult:
         key = build_key(_CACHE_NS, self._prompt_version, {
@@ -51,19 +69,9 @@ class Categoriser:
             log.info("categorise cache hit")
             return CategoriseResult(**cached)
 
-        if self._prompt_version == "v1":
-            system = CATEGORISE_SYSTEM_V1
-            user = build_categorise_user_v1(req.title, req.description, req.context)
-        else:
-            system = CATEGORISE_SYSTEM_V2
-            user = build_categorise_user_v2(req.title, req.description, req.context)
-        messages = [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ]
         try:
             resp = self._groq.chat(
-                messages,
+                self._build_messages(req),
                 temperature=0.1,
                 max_tokens=400,
                 response_format={"type": "json_object"},
