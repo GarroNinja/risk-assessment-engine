@@ -1,29 +1,27 @@
 def analyze_risk(text):
     risks = []
 
-    text_lower = text.lower()
+    lower = text.lower()
 
-    if "no firewall" in text_lower:
+    if "no firewall" in lower:
         risks.append("No firewall detected")
 
-    if "weak password" in text_lower:
-        risks.append("Weak password usage")
+    if "password" in lower and "123" in lower:
+        risks.append("Weak password detected")
 
-    if "drop table" in text_lower or "select * from" in text_lower:
-        risks.append("SQL Injection attempt")
+    if "drop table" in lower:
+        risks.append("SQL injection pattern detected")
 
-    if "<script>" in text_lower or "script" in text_lower:
-        risks.append("Possible XSS attack")
+    if "<script>" in lower:
+        risks.append("XSS pattern detected")
 
-    if "admin access" in text_lower:
-        risks.append("Privilege escalation attempt")
+    if not risks:
+        return {
+            "risk_level": "LOW",
+            "detected_issues": []
+        }
 
-    # Risk level logic
-    if len(risks) >= 2:
-        level = "HIGH"
-    elif len(risks) == 1:
-        level = "MEDIUM"
-    else:
-        level = "LOW"
-
-    return level, risks
+    return {
+        "risk_level": "HIGH",
+        "detected_issues": risks
+    }
