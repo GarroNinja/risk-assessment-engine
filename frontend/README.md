@@ -210,6 +210,37 @@ display using EventSource, analytics page with Recharts
 - Mock data fallback with amber warning banner
 - AI Report Streamer section at bottom of page
 
+### Day 12 — UI Components
+
+**Task:** Improve UI with reusable components for loading, empty states, errors and badges
+
+- LoadingSkeleton — shows loading UI for table, card, form, detail and dashboard (no layout shift)
+- EmptyState — shows message when no data (nodata, search, noresults, error, noaccess)
+- ErrorBoundary — catches page errors and shows error screen with retry options
+- StatusBadge — consistent rounded style with border for all status and severity values
+
+### Day 13 — Responsive Design
+
+**Task:** Make app fully responsive across mobile, tablet and desktop
+
+- Shared Navbar — hamburger menu on mobile, full menu on desktop, user info and logout
+- Active page highlight and menu auto-close on navigation
+
+***Breakpoints:***
+
+- 375px (Mobile) — stacked layout, 2-column KPI, scrollable tables, full-width buttons
+- 768px (Tablet) — better spacing, filters in one row, forms side-by-side
+- 1280px (Desktop) — 4-column KPI, charts + status side by side, full table
+- ResponsiveTest badge — shows current screen size (dev only, hidden in production)
+
+### Day 14 — UI Branding
+**Task:** Apply consistent design system
+
+- Primary colour set to #1B4F8A
+- Arial font used across app
+- 8px spacing system for consistent layout
+- Minimum 44px touch targets for buttons
+
 ---
 
 ## Tech Stack
@@ -247,6 +278,7 @@ frontend/
 │   ├── LoadingSkeleton.jsx
 │   ├── EmptyState.jsx
 │   ├── StatusBadge.jsx
+│   ├── Navbar.jsx
 │   ├── Pagination.jsx
 │   ├── ErrorBoundary.jsx
 │   ├── AiPanel.jsx
@@ -297,18 +329,18 @@ cd your-project-folder/frontend
 ```bash
 npm install
 ```
-**Step 4 — Set environment variables in `.env`**
+**Step 3 — Set environment variables in `.env`**
 ```
 VITE_API_URL=http://localhost:8080/api
 VITE_AI_URL=http://localhost:5000
 ```
 
-**Step 3 — Start development server**
+**Step 4 — Start development server**
 ```bash
 npm run dev
 ```
 
-**Step 4 — Open in browser**
+**Step 5 — Open in browser**
 http://localhost:5173
 
 ---
