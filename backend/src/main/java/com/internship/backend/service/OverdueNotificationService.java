@@ -22,8 +22,10 @@ public class OverdueNotificationService {
 
     @Scheduled(cron = "0 0 9 * * *")
     public void sendOverdueNotifications() {
+
         List<RiskRecord> overdueRecords =
-                repository.findByStatusAndDeletedFalse("OVERDUE");
+                repository.findByStatus("OVERDUE");
+
         for (RiskRecord record : overdueRecords) {
             try {
                 emailService.sendOverdueNotification(record);

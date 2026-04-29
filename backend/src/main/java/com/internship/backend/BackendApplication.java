@@ -7,9 +7,9 @@ import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
-@EnableJpaAuditing       // activates @CreatedDate / @LastModifiedDate
-@EnableCaching           // activates @Cacheable / @CacheEvict
-@EnableScheduling        // activates @Scheduled cron jobs
+@EnableJpaAuditing
+@EnableCaching
+@EnableScheduling
 public class BackendApplication {
 
     public static void main(String[] args) {
