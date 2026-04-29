@@ -37,38 +37,38 @@ function App() {
         {/* protected routes */}
         <Route path="/" element={
           <ErrorBoundary>
-            <DashboardPage />
+            <ProtectedRoute><DashboardPage /></ProtectedRoute>
           </ErrorBoundary>
         }/>
 
         <Route path="/risks" element={
           <ErrorBoundary>
-          <ListPage />
+            <ProtectedRoute><ListPage /></ProtectedRoute>
           </ErrorBoundary>
         }/>
 
         {/* /risks/new MUST be before /risks/:id */}
         <Route path="/risks/new" element={
           <ErrorBoundary>
-           <FormPage />
+            <ProtectedRoute><FormPage /></ProtectedRoute>
           </ErrorBoundary>
         }/>
 
         <Route path="/risks/:id" element={
           <ErrorBoundary>
-            <DetailPage />
+            <ProtectedRoute><DetailPage /></ProtectedRoute>
           </ErrorBoundary>
         }/>
 
         <Route path="/risks/:id/edit" element={
           <ErrorBoundary>
-           <FormPage />
+            <ProtectedRoute><FormPage /></ProtectedRoute>
           </ErrorBoundary>
         }/>
 
         <Route path="/analytics" element={
           <ErrorBoundary>
-            <AnalyticsPage />
+            <ProtectedRoute><AnalyticsPage /></ProtectedRoute>
           </ErrorBoundary>
         }/>
 
