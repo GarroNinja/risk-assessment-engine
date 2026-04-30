@@ -1,0 +1,100 @@
+/Users/ashakirana/Projects/risk-assessment-engine/ai-service/venv/lib/python3.14/site-packages/flask_limiter/_extension.py:364: UserWarning: Using the in-memory storage for tracking rate limits as no storage was explicitly specified. This is not recommended for production use. See: https://flask-limiter.readthedocs.io#configuring-a-storage-backend for documentation about configuring the storage backend.
+  warnings.warn(
+[2026-04-30 19:28:34,581] ERROR in app: Exception on /test [POST]
+Traceback (most recent call last):
+  File "/Users/ashakirana/Projects/risk-assessment-engine/ai-service/venv/lib/python3.14/site-packages/flask/app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+  File "/Users/ashakirana/Projects/risk-assessment-engine/ai-service/venv/lib/python3.14/site-packages/flask/app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "/Users/ashakirana/Projects/risk-assessment-engine/ai-service/venv/lib/python3.14/site-packages/flask/app.py", line 915, in full_dispatch_request
+    rv = self.preprocess_request()
+  File "/Users/ashakirana/Projects/risk-assessment-engine/ai-service/venv/lib/python3.14/site-packages/flask/app.py", line 1291, in preprocess_request
+    rv = self.ensure_sync(before_func)()
+  File "/Users/ashakirana/Projects/risk-assessment-engine/ai-service/app.py", line 21, in before_request
+    return security_middleware()
+  File "/Users/ashakirana/Projects/risk-assessment-engine/ai-service/middleware/security_middleware.py", line 14, in security_middleware
+    for key, value in data.items():
+                      ^^^^^^^^^^
+AttributeError: 'list' object has no attribute 'items'
+==============================================================================
+  AUDIT RUN 2 — rate limiter disabled for clean signal
+==============================================================================
+
+── Group F (re-run): HTML / XSS payloads ──
+  Reading code: line 22 strips, lowers — but sanitized value is DISCARDED (not written back to data dict).
+  Effect: 'blocked' or not, the original HTML reaches the route handler.
+  [200] plain script tag          → {"cleaned_text":"alert(1)","message":"Safe input received"}
+  [200] nested tags               → {"cleaned_text":"ipt>alert(1)ipt>","message":"Safe input received"}
+  [200] img onerror               → {"cleaned_text":"","message":"Safe input received"}
+  [200] svg onload                → {"cleaned_text":"","message":"Safe input received"}
+  [400] HTML entity encoded       → {"error":"SQL injection detected","field":"text"}
+  [200] javascript: scheme        → {"cleaned_text":"javascript:alert(1)","message":"Safe input received"}
+  [200] data: scheme              → {"cleaned_text":"data:text/html,alert(1)","message":"Safe input received"}
+  [200] polyglot                  → {"cleaned_text":"","message":"Safe input received"}
+
+── Group E (re-run): SQL bypass attempts ──
+  [400] uppercase 'SELECT'               → {"error":"SQL injection detected","field":"text"}
+  [400] case-mix 'SeLeCt'                → {"error":"SQL injection detected","field":"text"}
+  [200] URL-encoded 'select'             → {"cleaned_text":"%73%65%6c%65%63%74 * from users","message":"Safe input received"}
+  [200] unicode lookalike 'ѕelect'       → {"cleaned_text":"\u0455elect * from users","message":"Safe input received"}
+  [200] comment-break SEL/**/ECT         → {"cleaned_text":"SEL/**/ECT * FROM users","message":"Safe input received"}
+  [400] UNION select                     → {"error":"SQL injection detected","field":"text"}
+  [200] OR 1=1 string variant            → {"cleaned_text":"' OR '1'='1","message":"Safe input received"}
+  [400] nested keyword 'reselect'        → {"error":"SQL injection detected","field":"text"}
+  [400] nested keyword 'inserted'        → {"error":"SQL injection detected","field":"text"}
+  [400] nested keyword 'updated'         → {"error":"SQL injection detected","field":"text"}
+  [400] nested keyword 'deleted'         → {"error":"SQL injection detected","field":"text"}
+  [400] nested keyword 'dropped'         → {"error":"SQL injection detected","field":"text"}
+
+── Group H (re-run): structural edge cases ──
+  [400] empty body             → <!doctype html>
+<html lang=en>
+<title>400 Bad Request</title>
+<h1>Bad Request</h
+  [400] invalid JSON           → <!doctype html>
+<html lang=en>
+<title>400 Bad Request</title>
+<h1>Bad Request</h
+  [400] non-string field       → {"error":"Invalid input type","field":"text"}
+  [400] list value             → {"error":"Invalid input type","field":"items"}
+  [400] wrong Content-Type     → {"error":"Request must be JSON"}
+  [400] nested object          → {"error":"Invalid input type","field":"text"}
+  [500] array root             → <!doctype html>
+<html lang=en>
+<title>500 Internal Server Error</title>
+<h1>Inte
+  [400] null root              → {"error":"Empty request body"}
+
+── Group K (re-run): error message disclosure ──
+  Each error type returns a DIFFERENT message — telling attacker which rule fired:
+  [200] HTML payload           → {"cleaned_text":"alert(1)","message":"Safe input received"}
+  [400] Prompt injection       → {"error":"Prompt injection detected","field":"text"}
+  [400] SQL pattern            → {"error":"SQL injection detected","field":"text"}
+  [400] Empty                  → {"error":"Invalid input"}
+  [400] Non-string             → {"error":"Invalid input type","field":"text"}
+
+── PROOF: HTML sanitization output is discarded (never reaches route) ──
+  Manual code review of middleware/security_middleware.py lines 14-22:
+    for key, value in data.items():
+        ...
+        value = re.sub(r'<.*?>', '', value)   # creates new local 'value'
+        lower = value.lower()                 # used only for the IF checks below
+        # NOTE: 'data[key] = value' is NEVER called.
+        # NOTE: The route still calls request.get_json() and gets the ORIGINAL.
+
+  This is functionally identical to having no HTML sanitizer at all.
+
+── Group G (re-run): method bypass — add an ad-hoc GET route to demonstrate ──
+Traceback (most recent call last):
+  File "/Users/ashakirana/Projects/risk-assessment-engine/ai-service/../security-reports/scripts/run_audit_2.py", line 102, in <module>
+    @app.get('/audit-test-get')
+     ~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/Users/ashakirana/Projects/risk-assessment-engine/ai-service/venv/lib/python3.14/site-packages/flask/sansio/scaffold.py", line 46, in wrapper_func
+    self._check_setup_finished(f_name)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/ashakirana/Projects/risk-assessment-engine/ai-service/venv/lib/python3.14/site-packages/flask/sansio/app.py", line 415, in _check_setup_finished
+    raise AssertionError(
+    ...<7 lines>...
+    )
+AssertionError: The setup method 'get' can no longer be called on the application. It has already handled its first request, any changes will not be applied consistently.
+Make sure all imports, decorators, functions, etc. needed to set up the application are done before running it.
