@@ -1,2 +1,3 @@
-ALTER TABLE risk_records ADD COLUMN IF NOT EXISTS deleted BOOLEAN DEFAULT FALSE;
-CREATE INDEX IF NOT EXISTS idx_risk_records_deleted ON risk_records(deleted);
+-- deleted column is already added in V1 for PostgreSQL
+-- this migration is intentionally left as a no-op to preserve version numbering
+SELECT 1;

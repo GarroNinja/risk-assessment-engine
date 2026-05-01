@@ -1,3 +1,28 @@
-.env  
-target/  
-node_modules/ 
+# Environment variables - never commit
+.env
+
+# Java build output
+target/
+
+# Maven cache - never commit (300MB+)
+backend/.m2/
+.m2/
+
+# Node modules
+node_modules/
+
+# Python
+__pycache__/
+*.pyc
+
+# ChromaDB data
+chroma_data/
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db

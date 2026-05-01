@@ -21,8 +21,8 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: update
-    show-sql: true
+      ddl-auto: validate
+    show-sql: false
     open-in-view: false
 
   flyway:
@@ -31,7 +31,7 @@ spring:
     baseline-on-migrate: true
 
   cache:
-    type: simple
+    type: redis
 
   data:
     redis:
@@ -58,3 +58,9 @@ spring:
 jwt:
   secret: ${JWT_SECRET:mysecretkey123456789012345678901234567890}
   expiration: ${JWT_EXPIRATION:86400000}
+
+springdoc:
+  swagger-ui:
+    enabled: true
+  api-docs:
+    enabled: true

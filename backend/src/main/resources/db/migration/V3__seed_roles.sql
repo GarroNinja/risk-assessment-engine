@@ -1,3 +1,3 @@
-MERGE INTO roles (name) KEY(name) VALUES ('ADMIN');
-MERGE INTO roles (name) KEY(name) VALUES ('MANAGER');
-MERGE INTO roles (name) KEY(name) VALUES ('VIEWER');
+INSERT INTO roles (name) VALUES ('ADMIN')   ON CONFLICT (name) DO NOTHING;
+INSERT INTO roles (name) VALUES ('MANAGER') ON CONFLICT (name) DO NOTHING;
+INSERT INTO roles (name) VALUES ('VIEWER')  ON CONFLICT (name) DO NOTHING;
