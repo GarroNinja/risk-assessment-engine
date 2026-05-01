@@ -1,47 +1,22 @@
-from flask import request, jsonify
-import re
+from flask import jsonify, request
+
+_MAX_FIELD_BYTES = 50_000
+
 
 def security_middleware():
-    if request.method in ["POST", "PUT", "PATCH"]:
-        if not request.is_json:
-            return jsonify({"error": "Request must be JSON"}), 400
+    if request.method not in ("POST", "PUT", "PATCH"):
+        return None
 
-        data = request.get_json()
+    if not request.is_json:
+        return jsonify({"error": "content-type must be application/json"}), 400
 
-        if not data:
-            return jsonify({"error": "Empty request body"}), 400
+    data = request.get_json(silent=True)
 
-        for key, value in data.items():
-            if not isinstance(value, str):
-                return jsonify({
-                    "error": "Invalid input type",
-                    "field": key
-                }), 400
+    if not isinstance(data, dict):
+        return jsonify({"error": "request body must be a JSON object"}), 400
 
-            # HTML removal
-            value = re.sub(r'<.*?>', '', value)
-
-            lower = value.lower()
-
-            # Prompt Injection
-            if any(x in lower for x in [
-                "ignore previous instructions",
-                "system prompt",
-                "bypass",
-                "override",
-                "act as",
-                "jailbreak"
-            ]):
-                return jsonify({
-                    "error": "Prompt injection detected",
-                    "field": key
-                }), 400
-
-            # SQL Injection
-            if re.search(r"(select|drop|insert|delete|update|--|;)", lower):
-                return jsonify({
-                    "error": "SQL injection detected",
-                    "field": key
-                }), 400
+    for key, value in data.items():
+        if isinstance(value, str) and len(value.encode("utf-8")) > _MAX_FIELD_BYTES:
+            return jsonify({"error": "field exceeds maximum size", "field": key}), 400
 
     return None
