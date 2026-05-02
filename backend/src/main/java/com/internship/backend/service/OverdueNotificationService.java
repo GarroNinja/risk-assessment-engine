@@ -24,7 +24,7 @@ public class OverdueNotificationService {
     public void sendOverdueNotifications() {
 
         List<RiskRecord> overdueRecords =
-                repository.findByStatus("OVERDUE");
+                repository.findByStatusAndDeletedFalse("OVERDUE");
 
         for (RiskRecord record : overdueRecords) {
             try {

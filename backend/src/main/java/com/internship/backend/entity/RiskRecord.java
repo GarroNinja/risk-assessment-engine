@@ -33,6 +33,9 @@ public class RiskRecord {
     @Column(name = "risk_score")
     private Integer riskScore;
 
+    @Column(nullable = false)
+    private Boolean deleted = false;
+
     @CreatedDate
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

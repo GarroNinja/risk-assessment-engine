@@ -27,23 +27,17 @@ class RiskRecordRepositoryTest {
 
     @Test
     void findByStatus_shouldReturnRecords() {
-
         repository.save(sampleRecord());
-
-        List<RiskRecord> records = repository.findByStatus("OPEN");
-
+        List<RiskRecord> records = repository.findByStatusAndDeletedFalse("OPEN");
         assertFalse(records.isEmpty());
         assertEquals("OPEN", records.get(0).getStatus());
     }
 
     @Test
     void findByCategory_shouldReturnRecords() {
-
         repository.save(sampleRecord());
-
         List<RiskRecord> records =
-                repository.findByCategory("Infrastructure");
-
+                repository.findByCategoryAndDeletedFalse("Infrastructure");
         assertFalse(records.isEmpty());
         assertEquals("Infrastructure",
                 records.get(0).getCategory());
