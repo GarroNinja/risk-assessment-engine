@@ -8,6 +8,7 @@ from middleware.security_middleware import security_middleware
 from routes.categorise import bp as categorise_bp
 from routes.describe import describe_bp
 from routes.generate_report import bp as report_bp
+from routes.recommend import recommend_bp
 
 
 def create_app() -> Flask:
@@ -23,6 +24,7 @@ def create_app() -> Flask:
     app.register_blueprint(categorise_bp)
     app.register_blueprint(report_bp)
     app.register_blueprint(describe_bp)
+    app.register_blueprint(recommend_bp)
 
     @app.get("/health")
     def health():

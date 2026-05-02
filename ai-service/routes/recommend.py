@@ -11,19 +11,15 @@ from middleware.rate_limit import TokenBucket, rate_limit
 
 log = logging.getLogger(__name__)
 
-describe_bp = Blueprint("describe", __name__)
+recommend_bp = Blueprint("recommend", __name__)
 _bucket = TokenBucket(max_per_window=20, window_s=60)
 
 
-@describe_bp.post("/describe")
+@recommend_bp.post("/recommend")
 @rate_limit(_bucket)
-def describe():
+def recommend():
     body = request.get_json(silent=True) or {}
-    if "input" in body and isinstance(body["input"], dict):
-        text = body["input"].get("text", "")
-    else:
-        text = body.get("text", "")
-
+    text = body.get("text", "")
     if not isinstance(text, str) or not text.strip():
         return jsonify({"error": "text is required"}), 400
 
@@ -32,11 +28,11 @@ def describe():
         {
             "role": "system",
             "content": (
-                "You are a security analyst. Classify the described risk as Low, Medium, or High. "
-                "Identify the affected component and provide a brief reasoning.\n\n"
+                "You are a security engineer. Given a description of a security risk, "
+                "produce concrete remediation recommendations.\n\n"
                 "Respond with JSON matching this schema exactly:\n"
-                '{"risk_level": "Low|Medium|High", "reasoning": "...", "affected_component": "..."}\n'
-                "No code fences, no prose outside JSON."
+                '{"recommendations": [{"priority": "High|Medium|Low", "title": "...", "description": "..."}]}\n'
+                "Provide 3-5 recommendations ordered by priority. No prose outside JSON."
             ),
         },
         {"role": "user", "content": text.strip()},
@@ -44,12 +40,12 @@ def describe():
     try:
         resp = groq.chat(
             messages,
-            temperature=0.1,
-            max_tokens=512,
+            temperature=0.2,
+            max_tokens=1024,
             response_format={"type": "json_object"},
         )
     except GroqError as exc:
-        log.warning("describe groq error: %s", exc)
+        log.warning("recommend groq error: %s", exc)
         return jsonify({"error": "AI service unavailable", "detail": str(exc)}), 503
 
     content = resp["choices"][0]["message"]["content"]
@@ -58,8 +54,8 @@ def describe():
     except json.JSONDecodeError:
         return jsonify({"error": "model returned invalid JSON"}), 502
 
-    return jsonify({
-        "risk_level": str(data.get("risk_level", "Unknown")),
-        "reasoning": str(data.get("reasoning", "")),
-        "affected_component": str(data.get("affected_component", "")),
-    }), 200
+    recs = data.get("recommendations", [])
+    if not isinstance(recs, list):
+        recs = []
+
+    return jsonify({"recommendations": recs}), 200
