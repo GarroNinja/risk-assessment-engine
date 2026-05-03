@@ -5,9 +5,11 @@ from flask_cors import CORS
 
 from app_extensions import init_ai_extensions
 from middleware.security_middleware import security_middleware
+from routes.analyse_document import analyse_doc_bp
 from routes.categorise import bp as categorise_bp
 from routes.describe import describe_bp
 from routes.generate_report import bp as report_bp
+from routes.query import query_bp
 from routes.recommend import recommend_bp
 
 
@@ -25,6 +27,8 @@ def create_app() -> Flask:
     app.register_blueprint(report_bp)
     app.register_blueprint(describe_bp)
     app.register_blueprint(recommend_bp)
+    app.register_blueprint(query_bp)
+    app.register_blueprint(analyse_doc_bp)
 
     @app.get("/health")
     def health():
