@@ -1,0 +1,102 @@
+/Users/ashakirana/Projects/risk-assessment-engine/ai-service/venv/lib/python3.14/site-packages/flask_limiter/_extension.py:364: UserWarning: Using the in-memory storage for tracking rate limits as no storage was explicitly specified. This is not recommended for production use. See: https://flask-limiter.readthedocs.io#configuring-a-storage-backend for documentation about configuring the storage backend.
+  warnings.warn(
+==============================================================================
+  INDEPENDENT SECURITY AUDIT — AI SERVICE
+  Reviewer: Ashakirana V
+  Target  : ai-service/ Flask app (test client, no network)
+==============================================================================
+
+── Group A: phantom endpoints (README claims they exist) ──
+  POST /categorise               → 404
+  POST /generate-report          → 404
+  POST /describe                 → 404
+  POST /recommend                → 404
+  POST /analyse                  → 404
+
+── Group B: prompt injection BASELINE (Sanjana's exact keywords; should be blocked) ──
+  [400] ✓ blocked    literal 'ignore previous instructions'
+  [400] ✓ blocked    literal 'system prompt'
+  [400] ✓ blocked    literal 'act as'
+  [400] ✓ blocked    literal 'jailbreak'
+  [400] ✓ blocked    literal 'bypass'
+  [400] ✓ blocked    literal 'override'
+
+── Group C: prompt injection BYPASS attempts (should all be blocked too) ──
+  [200] ✗ BYPASSED   synonym 'forget everything'
+  [200] ✗ BYPASSED   synonym 'disregard prior'
+  [200] ✗ BYPASSED   synonym 'skip safety'
+  [200] ✗ BYPASSED   synonym 'pretend you are'
+  [200] ✗ BYPASSED   synonym 'role-play as'
+  [200] ✗ BYPASSED   delimiter SYSTEM injection
+  [200] ✗ BYPASSED   hindi instruction
+  [200] ✗ BYPASSED   french instruction
+  [200] ✗ BYPASSED   spanish instruction
+  [200] ✗ BYPASSED   base64 encoded inj
+  [200] ✗ BYPASSED   rot13 encoded inj
+  [200] ✗ BYPASSED   indirect via doc body
+  [200] ✗ BYPASSED   leetspeak
+
+── Group D: SQL regex FALSE POSITIVES (legit business sentences; should pass) ──
+  [400] ✗ FALSE-POS  'we need to update the report'
+  [400] ✗ FALSE-POS  'please delete this entry'
+  [400] ✗ FALSE-POS  'we selected the critical risks'
+  [400] ✗ FALSE-POS  'insert the values into the form'
+  [400] ✗ FALSE-POS  'drop a comment'
+  [400] ✗ FALSE-POS  'item; status updated'
+  [400] ✗ FALSE-POS  '-- separator in prose'
+
+── Group E: SQL injection bypasses (should be blocked) ──
+  [400] ✓ blocked    uppercase 'SELECT'
+  [400] ✓ blocked    case-mix 'SeLeCt'
+  [200] ✗ BYPASSED   URL-encoded 'select'
+  [200] ✗ BYPASSED   unicode lookalike 'ѕelect'
+  [429] ✗ BYPASSED   comment-break 'SEL/**/ECT'
+  [429] ✗ BYPASSED   UNION select
+  [429] ✗ BYPASSED   OR 1=1 (string)
+
+── Group F: HTML / XSS bypasses (regex strip is broken) ──
+  NOTE: even when 'blocked', sanitized value is never written back to data — see line 22 of middleware
+  [429] (sanitization happens but value is discarded; passes downstream) — plain script tag
+  [429] (sanitization happens but value is discarded; passes downstream) — nested tags
+  [429] (sanitization happens but value is discarded; passes downstream) — img onerror
+  [429] (sanitization happens but value is discarded; passes downstream) — svg onload
+  [429] (sanitization happens but value is discarded; passes downstream) — HTML entity encoded
+  [429] (sanitization happens but value is discarded; passes downstream) — javascript: scheme
+
+── Group G: method bypass — middleware only runs on POST/PUT/PATCH ──
+  Middleware line 5: 'if request.method in [POST, PUT, PATCH]'
+  GET /test?text=ignore+previous+instructions → 405 (middleware never ran)
+  DELETE /test                                  → 405 (middleware never ran)
+
+── Group H: structural edge cases ──
+  empty body                  → 429 {"error":"Rate limit exceeded","retry_after":"30 per 1 minut
+  invalid JSON                → 429 {"error":"Rate limit exceeded","retry_after":"30 per 1 minut
+  non-string field            → 429 {"error":"Rate limit exceeded","retry_after":"30 per 1 minut
+  list value (not string)     → 429 (early-return, but skipped sanitization)
+  wrong Content-Type          → 429 (no JSON parse)
+
+── Group I: rate limiting (default 30/min) ──
+  35 quick requests: {429: 35}
+  Expectation: ~30 of 200/400, 5 of 429 — confirms rate limit triggers correctly
+
+── Group J: rate-limit bypass via X-Forwarded-For rotation ──
+  35 requests with rotating XFF: {429: 35}
+  XFF rotation did NOT bypass rate limit. Good.
+
+── Group K: error message disclosure ──
+  Each error tells attacker exactly which filter triggered, helping bypass design:
+  HTML payload           → 429 {"error":"Rate limit exceeded","retry_after":"30 per 1 minute"}
+  Prompt injection       → 429 {"error":"Rate limit exceeded","retry_after":"30 per 1 minute"}
+  SQL pattern            → 429 {"error":"Rate limit exceeded","retry_after":"30 per 1 minute"}
+
+==============================================================================
+  AUDIT SUMMARY
+==============================================================================
+  prompt-baseline        pass=6   fail=0    (total 6)
+  prompt-bypass          pass=0   fail=0    (total 13)
+  sql-fp                 pass=0   fail=0    (total 7)
+  sql-bypass             pass=2   fail=0    (total 7)
+  html                   pass=0   fail=0    (total 6)
+
+  Bypass rate (prompt-bypass) = 0/13 = 0%
+  False-positive rate (sql-fp) = 0/7 = 0%
