@@ -32,7 +32,7 @@ export default class ErrorBoundary extends Component {
 
   componentDidCatch(error, errorInfo) {
     this.setState({ errorInfo })
-    console.error('ErrorBoundary caught:', error, errorInfo)
+    if (import.meta.env.DEV) console.error('ErrorBoundary caught:', error, errorInfo)
   }
 
   handleReset() {
@@ -61,17 +61,18 @@ export default class ErrorBoundary extends Component {
           </p>
 
           {/* error detail — dev mode */}
-          {this.state.error && (
-            <div className="mb-6 text-left bg-red-50 border border-red-100
-                            rounded-xl px-4 py-3">
-              <p className="text-xs font-semibold text-red-600 mb-1">
-                Error Details
-              </p>
-              <p className="text-xs text-red-500 font-mono break-all">
-                {this.state.error.toString()}
-              </p>
-            </div>
-          )}
+         {/* F-035 fix — only show error details in development */}
+     {import.meta.env.DEV && this.state.error && (
+      <div className="mb-6 text-left bg-red-50 border border-red-100
+                  rounded-xl px-4 py-3">
+       <p className="text-xs font-semibold text-red-600 mb-1">
+         Error Details (dev only)
+       </p>
+        <p className="text-xs text-red-500 font-mono break-all">
+        {this.state.error.toString()}
+        </p>
+       </div>
+       )}
 
           <div className="flex gap-3 justify-center">
             <button

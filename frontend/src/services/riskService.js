@@ -1,25 +1,25 @@
 import api from './api'
 
 export const getAllRisks = (page = 0, size = 10, sortBy = 'id', sortDir = 'asc') =>
-  api.get('/risks/all', { params: { page, size, sortBy, sortDir } })
+  api.get('/api/risk-records/all', { params: { page, size, sortBy, sortDir } })
 
 export const getRiskById = (id) =>
-  api.get(`/risks/${id}`)
+  api.get(`/api/risk-records/${id}`)
 
 export const createRisk = (data) =>
-  api.post('/risks/create', data)
+  api.post('/api/risk-records/create', data)
 
 export const updateRisk = (id, data) =>
-  api.put(`/risks/${id}`, data)
+  api.put(`/api/risk-records/${id}`, data)
 
 export const deleteRisk = (id) =>
-  api.delete(`/risks/${id}`)
+  api.delete(`/api/risk-records/${id}`)
 
 export const searchRisks = (q) =>
-  api.get('/risks/search', { params: { q } })
+  api.get('/api/risk-records/search', { params: { q } })
 
 export const getRiskStats = () =>
-  api.get('/risks/stats')
+  api.get('/api/risk-records/stats')
 
 export const exportRisksCSV = () =>
-  api.get('/risks/export', { responseType: 'blob' })
+  api.get('/api/risk-records/export', { responseType: 'blob' })

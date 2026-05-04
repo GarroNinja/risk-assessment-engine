@@ -94,7 +94,7 @@ export default function ReportStreamer({ riskData }) {
         },
         // onError — fallback to REST
         (errMsg) => {
-          console.warn('SSE failed, falling back to REST:', errMsg)
+          if (import.meta.env.DEV) console.warn('SSE failed, falling back to REST:', errMsg)
           setUseSSE(false)
           handleRestFallback(payload)
         }
