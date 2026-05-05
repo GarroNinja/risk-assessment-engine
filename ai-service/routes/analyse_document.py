@@ -11,19 +11,15 @@ from middleware.rate_limit import TokenBucket, rate_limit
 
 log = logging.getLogger(__name__)
 
-describe_bp = Blueprint("describe", __name__)
-_bucket = TokenBucket(max_per_window=20, window_s=60)
+analyse_doc_bp = Blueprint("analyse_document", __name__)
+_bucket = TokenBucket(max_per_window=10, window_s=60)
 
 
-@describe_bp.post("/describe")
+@analyse_doc_bp.post("/analyse-document")
 @rate_limit(_bucket)
-def describe():
+def analyse_document():
     body = request.get_json(silent=True) or {}
-    if "input" in body and isinstance(body["input"], dict):
-        text = body["input"].get("text", "")
-    else:
-        text = body.get("text", "")
-
+    text = body.get("text", "")
     if not isinstance(text, str) or not text.strip():
         return jsonify({"error": "text is required"}), 400
 
@@ -32,11 +28,16 @@ def describe():
         {
             "role": "system",
             "content": (
-                "You are a security analyst. Classify the described risk as Low, Medium, or High. "
-                "Identify the affected component and provide a brief reasoning.\n\n"
+                "You are a security auditor. Analyse the provided document or text for security risks.\n\n"
                 "Respond with JSON matching this schema exactly:\n"
-                '{"risk_level": "Low|Medium|High", "reasoning": "...", "affected_component": "..."}\n'
-                "No code fences, no prose outside JSON."
+                "{\n"
+                '  "findings": [\n'
+                '    {"title": "...", "severity": "Low|Medium|High|Critical", "description": "...", "recommendation": "..."}\n'
+                "  ],\n"
+                '  "summary": "..."\n'
+                "}\n"
+                "List all identified risks. If no risks are found, return an empty findings array with an appropriate summary. "
+                "No prose outside JSON."
             ),
         },
         {"role": "user", "content": text.strip()},
@@ -45,11 +46,11 @@ def describe():
         resp = groq.chat(
             messages,
             temperature=0.1,
-            max_tokens=512,
+            max_tokens=2048,
             response_format={"type": "json_object"},
         )
     except GroqError as exc:
-        log.warning("describe groq error: %s", exc)
+        log.warning("analyse-document groq error: %s", exc)
         return jsonify({"error": "AI service unavailable", "detail": str(exc)}), 503
 
     content = resp["choices"][0]["message"]["content"]
@@ -58,8 +59,11 @@ def describe():
     except json.JSONDecodeError:
         return jsonify({"error": "model returned invalid JSON"}), 502
 
+    findings = data.get("findings", [])
+    if not isinstance(findings, list):
+        findings = []
+
     return jsonify({
-        "risk_level": str(data.get("risk_level", "Unknown")),
-        "reasoning": str(data.get("reasoning", "")),
-        "affected_component": str(data.get("affected_component", "")),
+        "findings": findings,
+        "summary": str(data.get("summary", "")),
     }), 200

@@ -1,4 +1,4 @@
-﻿server:
+server:
   port: 8080
 
 spring:
@@ -9,9 +9,9 @@ spring:
     allow-circular-references: true
 
   datasource:
-    url: ${DB_URL:jdbc:h2:mem:riskdb;DB_CLOSE_DELAY=-1}
-    driver-class-name: ${DB_DRIVER:org.h2.Driver}
-    username: ${DB_USERNAME:sa}
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/riskdb}
+    driver-class-name: org.postgresql.Driver
+    username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:}
 
   jpa:
@@ -37,8 +37,8 @@ spring:
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME:test@gmail.com}
-    password: ${MAIL_PASSWORD:test123}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
     properties:
       mail:
         smtp:
@@ -51,7 +51,7 @@ spring:
       indent-output: true
 
 jwt:
-  secret: ${JWT_SECRET:mysecretkey123456789012345678901234567890}
+  secret: ${JWT_SECRET:}
   expiration: ${JWT_EXPIRATION:86400000}
 
 springdoc:

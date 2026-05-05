@@ -12,3 +12,16 @@ chroma_data/
 .DS_Store
 Thumbs.db
 venv/
+
+# local commit replayer (do not ship)
+commit.sh
+.commits/
+
+# project PDF
+Tool-02_Risk_Assessment_Engine.pdf
+
+# pytest
+.pytest_cache/
+
+# python eggs
+*.egg-info/
